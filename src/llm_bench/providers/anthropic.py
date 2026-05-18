@@ -25,12 +25,15 @@ class AnthropicAdapter(ProviderAdapter):
         if not self.api_key:
             raise RuntimeError("ANTHROPIC_API_KEY not set")
 
+        # Newer Claude (Opus 4.7+) deprecated `temperature`; older models still accept it.
+        omit_temperature = "opus-4-7" in model_id or "opus-4-6" in model_id or "sonnet-4-6" in model_id
         body: dict = {
             "model": model_id,
             "max_tokens": 4096,
             "messages": [{"role": "user", "content": prompt}],
-            "temperature": 0,
         }
+        if not omit_temperature:
+            body["temperature"] = 0
         if system:
             body["system"] = system
 

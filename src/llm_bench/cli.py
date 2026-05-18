@@ -10,12 +10,19 @@ from dotenv import load_dotenv
 
 from llm_bench import __version__
 from llm_bench.pareto import compute_pareto_frontier
-from llm_bench.pricing.catalog import DEFAULT_BENCHMARK_MODELS, get_catalog, resolve_model_id
+from llm_bench.pricing.catalog import (
+    DEFAULT_BENCHMARK_MODELS,
+    benchmarkable_models,
+    get_catalog,
+    resolve_model_id,
+)
 from llm_bench.reports.terminal import (
     print_benchmark_table,
     print_pricing_table,
     print_recommendations,
 )
+from llm_bench.benchmark_store import save_benchmark_results
+from llm_bench.reports.html import generate_dashboard
 from llm_bench.runner import run_benchmark_sync
 from llm_bench.snapshot import save_snapshot
 
@@ -68,11 +75,24 @@ def snapshot() -> None:
 @click.option("--budget", "-b", default=5.0, type=float, help="Max spend in USD")
 @click.option("--dry-run", is_flag=True, help="Estimate costs without API calls")
 @click.option("--output", "-o", default=None, help="Save JSON results to file")
-def run(task: str, models: str | None, budget: float, dry_run: bool, output: str | None) -> None:
+@click.option("--save", is_flag=True, help="Save results to data/benchmarks/ for dashboard")
+@click.option("--all", "all_models", is_flag=True, help="Benchmark every catalog model with an adapter")
+def run(
+    task: str,
+    models: str | None,
+    budget: float,
+    dry_run: bool,
+    output: str | None,
+    save: bool,
+    all_models: bool,
+) -> None:
     """Run benchmark across models for a task."""
-    model_ids = DEFAULT_BENCHMARK_MODELS
-    if models:
+    if all_models:
+        model_ids = benchmarkable_models()
+    elif models:
         model_ids = [m.strip() for m in models.split(",")]
+    else:
+        model_ids = DEFAULT_BENCHMARK_MODELS
 
     if dry_run:
         click.echo(f"[dry-run] Would benchmark {len(model_ids)} models on '{task}'")
@@ -83,6 +103,10 @@ def run(task: str, models: str | None, budget: float, dry_run: bool, output: str
     frontier = compute_pareto_frontier(results)
     if frontier and not dry_run:
         click.echo("\nPareto frontier: " + " → ".join(r.display_name for r in frontier))
+
+    if save and not dry_run and results:
+        path = save_benchmark_results(task, results)
+        click.echo(f"Benchmark data saved: {path}")
 
     if output:
         import json
@@ -101,6 +125,16 @@ def run(task: str, models: str | None, budget: float, dry_run: bool, output: str
         ]
         Path(output).write_text(json.dumps(data, indent=2), encoding="utf-8")
         click.echo(f"Results saved: {output}")
+
+
+@main.command()
+@click.option("--output", "-o", default=None, help="Output directory (default: docs/)")
+def dashboard(output: str | None) -> None:
+    """Generate static dashboard for GitHub Pages."""
+    out = Path(output) if output else None
+    path = generate_dashboard(out)
+    click.echo(f"Dashboard generated: {path}")
+    click.echo("Enable GitHub Pages: Settings → Pages → Source: GitHub Actions")
 
 
 @main.command("compare")

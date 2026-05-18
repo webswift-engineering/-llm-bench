@@ -1,0 +1,307 @@
+{
+  "task": "classification",
+  "updated_at": "2026-05-18T13:29:54.586434+00:00",
+  "results": [
+    {
+      "model_id": "gpt-5.5",
+      "display_name": "GPT-5.5",
+      "provider": "openai",
+      "task": "classification",
+      "quality_score": 100.0,
+      "latency_p50_ms": 2061.5,
+      "latency_p95_ms": 2674.6,
+      "cost_per_1k_requests": 7.0,
+      "cost_per_quality_point": 0.0001,
+      "total_cost_usd": 0.0077,
+      "sample_count": 8,
+      "tags": []
+    },
+    {
+      "model_id": "gpt-5.4",
+      "display_name": "GPT-5.4",
+      "provider": "openai",
+      "task": "classification",
+      "quality_score": 100.0,
+      "latency_p50_ms": 1181.0,
+      "latency_p95_ms": 1598.0,
+      "cost_per_1k_requests": 3.5,
+      "cost_per_quality_point": 0.0,
+      "total_cost_usd": 0.0021,
+      "sample_count": 8,
+      "tags": []
+    },
+    {
+      "model_id": "gpt-5.4-mini",
+      "display_name": "GPT-5.4 mini",
+      "provider": "openai",
+      "task": "classification",
+      "quality_score": 100.0,
+      "latency_p50_ms": 1122.3,
+      "latency_p95_ms": 1303.0,
+      "cost_per_1k_requests": 1.05,
+      "cost_per_quality_point": 0.0,
+      "total_cost_usd": 0.0006,
+      "sample_count": 8,
+      "tags": []
+    },
+    {
+      "model_id": "gpt-4o",
+      "display_name": "GPT-4o",
+      "provider": "openai",
+      "task": "classification",
+      "quality_score": 100.0,
+      "latency_p50_ms": 989.8,
+      "latency_p95_ms": 1584.2,
+      "cost_per_1k_requests": 2.75,
+      "cost_per_quality_point": 0.0,
+      "total_cost_usd": 0.0017,
+      "sample_count": 8,
+      "tags": []
+    },
+    {
+      "model_id": "gpt-4o-mini",
+      "display_name": "GPT-4o mini",
+      "provider": "openai",
+      "task": "classification",
+      "quality_score": 100.0,
+      "latency_p50_ms": 1046.0,
+      "latency_p95_ms": 8037.3,
+      "cost_per_1k_requests": 0.17,
+      "cost_per_quality_point": 0.0,
+      "total_cost_usd": 0.0001,
+      "sample_count": 8,
+      "tags": [
+        "value",
+        "cheapest"
+      ]
+    },
+    {
+      "model_id": "gpt-4.1",
+      "display_name": "GPT-4.1",
+      "provider": "openai",
+      "task": "classification",
+      "quality_score": 100.0,
+      "latency_p50_ms": 1288.7,
+      "latency_p95_ms": 2455.0,
+      "cost_per_1k_requests": 2.2,
+      "cost_per_quality_point": 0.0,
+      "total_cost_usd": 0.0014,
+      "sample_count": 8,
+      "tags": []
+    },
+    {
+      "model_id": "gpt-4.1-mini",
+      "display_name": "GPT-4.1 mini",
+      "provider": "openai",
+      "task": "classification",
+      "quality_score": 100.0,
+      "latency_p50_ms": 1169.2,
+      "latency_p95_ms": 4791.5,
+      "cost_per_1k_requests": 0.44,
+      "cost_per_quality_point": 0.0,
+      "total_cost_usd": 0.0003,
+      "sample_count": 8,
+      "tags": [
+        "value"
+      ]
+    },
+    {
+      "model_id": "o3-mini",
+      "display_name": "o3-mini",
+      "provider": "openai",
+      "task": "classification",
+      "quality_score": 100.0,
+      "latency_p50_ms": 1631.9,
+      "latency_p95_ms": 2166.1,
+      "cost_per_1k_requests": 1.21,
+      "cost_per_quality_point": 0.0,
+      "total_cost_usd": 0.0021,
+      "sample_count": 8,
+      "tags": []
+    },
+    {
+      "model_id": "claude-opus-4-7",
+      "display_name": "Claude Opus 4.7",
+      "provider": "anthropic",
+      "task": "classification",
+      "quality_score": 100.0,
+      "latency_p50_ms": 2452.4,
+      "latency_p95_ms": 4432.1,
+      "cost_per_1k_requests": 6.25,
+      "cost_per_quality_point": 0.0001,
+      "total_cost_usd": 0.0061,
+      "sample_count": 8,
+      "tags": []
+    },
+    {
+      "model_id": "claude-sonnet-4-6",
+      "display_name": "Claude Sonnet 4.6",
+      "provider": "anthropic",
+      "task": "classification",
+      "quality_score": 100.0,
+      "latency_p50_ms": 2019.0,
+      "latency_p95_ms": 2559.4,
+      "cost_per_1k_requests": 3.75,
+      "cost_per_quality_point": 0.0,
+      "total_cost_usd": 0.0025,
+      "sample_count": 8,
+      "tags": []
+    },
+    {
+      "model_id": "claude-opus-4-5-20251101",
+      "display_name": "Claude Opus 4.5",
+      "provider": "anthropic",
+      "task": "classification",
+      "quality_score": 100.0,
+      "latency_p50_ms": 2255.5,
+      "latency_p95_ms": 2945.2,
+      "cost_per_1k_requests": 6.25,
+      "cost_per_quality_point": 0.0,
+      "total_cost_usd": 0.0042,
+      "sample_count": 8,
+      "tags": []
+    },
+    {
+      "model_id": "claude-sonnet-4-5-20250929",
+      "display_name": "Claude Sonnet 4.5",
+      "provider": "anthropic",
+      "task": "classification",
+      "quality_score": 100.0,
+      "latency_p50_ms": 2112.4,
+      "latency_p95_ms": 2624.7,
+      "cost_per_1k_requests": 3.75,
+      "cost_per_quality_point": 0.0,
+      "total_cost_usd": 0.0025,
+      "sample_count": 8,
+      "tags": []
+    },
+    {
+      "model_id": "claude-haiku-4-5-20251001",
+      "display_name": "Claude Haiku 4.5",
+      "provider": "anthropic",
+      "task": "classification",
+      "quality_score": 100.0,
+      "latency_p50_ms": 1286.4,
+      "latency_p95_ms": 1592.2,
+      "cost_per_1k_requests": 1.25,
+      "cost_per_quality_point": 0.0,
+      "total_cost_usd": 0.0008,
+      "sample_count": 8,
+      "tags": []
+    },
+    {
+      "model_id": "claude-opus-4-1-20250805",
+      "display_name": "Claude Opus 4.1",
+      "provider": "anthropic",
+      "task": "classification",
+      "quality_score": 100.0,
+      "latency_p50_ms": 2381.4,
+      "latency_p95_ms": 2936.5,
+      "cost_per_1k_requests": 18.75,
+      "cost_per_quality_point": 0.0001,
+      "total_cost_usd": 0.0125,
+      "sample_count": 8,
+      "tags": []
+    },
+    {
+      "model_id": "openai/gpt-oss-120b",
+      "display_name": "GPT OSS 120B (Groq)",
+      "provider": "groq",
+      "task": "classification",
+      "quality_score": 100.0,
+      "latency_p50_ms": 823.2,
+      "latency_p95_ms": 914.6,
+      "cost_per_1k_requests": 0.17,
+      "cost_per_quality_point": 0.0,
+      "total_cost_usd": 0.0004,
+      "sample_count": 8,
+      "tags": [
+        "value",
+        "cheapest"
+      ]
+    },
+    {
+      "model_id": "openai/gpt-oss-20b",
+      "display_name": "GPT OSS 20B (Groq)",
+      "provider": "groq",
+      "task": "classification",
+      "quality_score": 100.0,
+      "latency_p50_ms": 721.7,
+      "latency_p95_ms": 920.8,
+      "cost_per_1k_requests": 0.08,
+      "cost_per_quality_point": 0.0,
+      "total_cost_usd": 0.0002,
+      "sample_count": 8,
+      "tags": [
+        "value",
+        "cheapest"
+      ]
+    },
+    {
+      "model_id": "meta-llama/llama-4-scout-17b-16e-instruct",
+      "display_name": "Llama 4 Scout 17B (Groq)",
+      "provider": "groq",
+      "task": "classification",
+      "quality_score": 100.0,
+      "latency_p50_ms": 812.0,
+      "latency_p95_ms": 1128.0,
+      "cost_per_1k_requests": 0.11,
+      "cost_per_quality_point": 0.0,
+      "total_cost_usd": 0.0001,
+      "sample_count": 8,
+      "tags": [
+        "value",
+        "cheapest"
+      ]
+    },
+    {
+      "model_id": "qwen/qwen3-32b",
+      "display_name": "Qwen3 32B (Groq)",
+      "provider": "groq",
+      "task": "classification",
+      "quality_score": 100.0,
+      "latency_p50_ms": 1070.4,
+      "latency_p95_ms": 1432.1,
+      "cost_per_1k_requests": 0.23,
+      "cost_per_quality_point": 0.0,
+      "total_cost_usd": 0.001,
+      "sample_count": 8,
+      "tags": [
+        "value"
+      ]
+    },
+    {
+      "model_id": "llama-3.3-70b-versatile",
+      "display_name": "Llama 3.3 70B (Groq)",
+      "provider": "groq",
+      "task": "classification",
+      "quality_score": 100.0,
+      "latency_p50_ms": 923.8,
+      "latency_p95_ms": 1595.9,
+      "cost_per_1k_requests": 0.41,
+      "cost_per_quality_point": 0.0,
+      "total_cost_usd": 0.0005,
+      "sample_count": 8,
+      "tags": [
+        "value"
+      ]
+    },
+    {
+      "model_id": "llama-3.1-8b-instant",
+      "display_name": "Llama 3.1 8B (Groq)",
+      "provider": "groq",
+      "task": "classification",
+      "quality_score": 100.0,
+      "latency_p50_ms": 904.3,
+      "latency_p95_ms": 1104.1,
+      "cost_per_1k_requests": 0.04,
+      "cost_per_quality_point": 0.0,
+      "total_cost_usd": 0.0,
+      "sample_count": 8,
+      "tags": [
+        "value",
+        "cheapest"
+      ]
+    }
+  ]
+}

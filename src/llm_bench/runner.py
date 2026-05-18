@@ -148,18 +148,18 @@ async def run_benchmark(
                 )
         return results
 
+    import sys
+
     for model_id in model_ids:
         if remaining <= 0:
             break
+        print(f"  Running {model_id}...", file=sys.stderr)
         try:
             result = await run_model_benchmark(model_id, task, remaining)
             if result:
                 results.append(result)
                 remaining -= result.total_cost_usd
-        except (RuntimeError, ValueError) as exc:
-            # Skip models without keys or unsupported providers
-            import sys
-
+        except Exception as exc:  # network, auth, deprecated models, etc.
             print(f"  Skipping {model_id}: {exc}", file=sys.stderr)
 
     return results

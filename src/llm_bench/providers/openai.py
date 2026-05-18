@@ -30,12 +30,19 @@ class OpenAIAdapter(ProviderAdapter):
             messages.append({"role": "system", "content": system})
         messages.append({"role": "user", "content": prompt})
 
+        # Reasoning models (o-series, gpt-5+) don't accept `temperature=0`;
+        # they only support the default (1).
+        omit_temperature = model_id.startswith(("o1", "o3", "o4", "gpt-5"))
+        payload: dict = {"model": model_id, "messages": messages}
+        if not omit_temperature:
+            payload["temperature"] = 0
+
         start = time.perf_counter()
         async with httpx.AsyncClient(timeout=120.0) as client:
             resp = await client.post(
                 f"{self.base_url}/chat/completions",
                 headers={"Authorization": f"Bearer {self.api_key}"},
-                json={"model": model_id, "messages": messages, "temperature": 0},
+                json=payload,
             )
             resp.raise_for_status()
             data = resp.json()

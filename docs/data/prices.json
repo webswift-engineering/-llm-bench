@@ -1,0 +1,162 @@
+[
+  {
+    "provider": "openai",
+    "model_id": "gpt-5.5",
+    "display_name": "GPT-5.5",
+    "input_per_1m": 5.0,
+    "output_per_1m": 30.0,
+    "avg_per_1m": 11.25
+  },
+  {
+    "provider": "openai",
+    "model_id": "gpt-5.4",
+    "display_name": "GPT-5.4",
+    "input_per_1m": 2.5,
+    "output_per_1m": 15.0,
+    "avg_per_1m": 5.625
+  },
+  {
+    "provider": "openai",
+    "model_id": "gpt-5.4-mini",
+    "display_name": "GPT-5.4 mini",
+    "input_per_1m": 0.75,
+    "output_per_1m": 4.5,
+    "avg_per_1m": 1.688
+  },
+  {
+    "provider": "openai",
+    "model_id": "gpt-4o",
+    "display_name": "GPT-4o",
+    "input_per_1m": 2.5,
+    "output_per_1m": 10.0,
+    "avg_per_1m": 4.375
+  },
+  {
+    "provider": "openai",
+    "model_id": "gpt-4o-mini",
+    "display_name": "GPT-4o mini",
+    "input_per_1m": 0.15,
+    "output_per_1m": 0.6,
+    "avg_per_1m": 0.262
+  },
+  {
+    "provider": "openai",
+    "model_id": "gpt-4.1",
+    "display_name": "GPT-4.1",
+    "input_per_1m": 2.0,
+    "output_per_1m": 8.0,
+    "avg_per_1m": 3.5
+  },
+  {
+    "provider": "openai",
+    "model_id": "gpt-4.1-mini",
+    "display_name": "GPT-4.1 mini",
+    "input_per_1m": 0.4,
+    "output_per_1m": 1.6,
+    "avg_per_1m": 0.7
+  },
+  {
+    "provider": "openai",
+    "model_id": "o3-mini",
+    "display_name": "o3-mini",
+    "input_per_1m": 1.1,
+    "output_per_1m": 4.4,
+    "avg_per_1m": 1.925
+  },
+  {
+    "provider": "anthropic",
+    "model_id": "claude-opus-4-7",
+    "display_name": "Claude Opus 4.7",
+    "input_per_1m": 5.0,
+    "output_per_1m": 25.0,
+    "avg_per_1m": 10.0
+  },
+  {
+    "provider": "anthropic",
+    "model_id": "claude-sonnet-4-6",
+    "display_name": "Claude Sonnet 4.6",
+    "input_per_1m": 3.0,
+    "output_per_1m": 15.0,
+    "avg_per_1m": 6.0
+  },
+  {
+    "provider": "anthropic",
+    "model_id": "claude-opus-4-5-20251101",
+    "display_name": "Claude Opus 4.5",
+    "input_per_1m": 5.0,
+    "output_per_1m": 25.0,
+    "avg_per_1m": 10.0
+  },
+  {
+    "provider": "anthropic",
+    "model_id": "claude-sonnet-4-5-20250929",
+    "display_name": "Claude Sonnet 4.5",
+    "input_per_1m": 3.0,
+    "output_per_1m": 15.0,
+    "avg_per_1m": 6.0
+  },
+  {
+    "provider": "anthropic",
+    "model_id": "claude-haiku-4-5-20251001",
+    "display_name": "Claude Haiku 4.5",
+    "input_per_1m": 1.0,
+    "output_per_1m": 5.0,
+    "avg_per_1m": 2.0
+  },
+  {
+    "provider": "anthropic",
+    "model_id": "claude-opus-4-1-20250805",
+    "display_name": "Claude Opus 4.1",
+    "input_per_1m": 15.0,
+    "output_per_1m": 75.0,
+    "avg_per_1m": 30.0
+  },
+  {
+    "provider": "groq",
+    "model_id": "openai/gpt-oss-120b",
+    "display_name": "GPT OSS 120B (Groq)",
+    "input_per_1m": 0.15,
+    "output_per_1m": 0.6,
+    "avg_per_1m": 0.262
+  },
+  {
+    "provider": "groq",
+    "model_id": "openai/gpt-oss-20b",
+    "display_name": "GPT OSS 20B (Groq)",
+    "input_per_1m": 0.075,
+    "output_per_1m": 0.3,
+    "avg_per_1m": 0.131
+  },
+  {
+    "provider": "groq",
+    "model_id": "meta-llama/llama-4-scout-17b-16e-instruct",
+    "display_name": "Llama 4 Scout 17B (Groq)",
+    "input_per_1m": 0.11,
+    "output_per_1m": 0.34,
+    "avg_per_1m": 0.168
+  },
+  {
+    "provider": "groq",
+    "model_id": "qwen/qwen3-32b",
+    "display_name": "Qwen3 32B (Groq)",
+    "input_per_1m": 0.29,
+    "output_per_1m": 0.59,
+    "avg_per_1m": 0.365
+  },
+  {
+    "provider": "groq",
+    "model_id": "llama-3.3-70b-versatile",
+    "display_name": "Llama 3.3 70B (Groq)",
+    "input_per_1m": 0.59,
+    "output_per_1m": 0.79,
+    "avg_per_1m": 0.64
+  },
+  {
+    "provider": "groq",
+    "model_id": "llama-3.1-8b-instant",
+    "display_name": "Llama 3.1 8B (Groq)",
+    "input_per_1m": 0.05,
+    "output_per_1m": 0.08,
+    "avg_per_1m": 0.058
+  }
+]

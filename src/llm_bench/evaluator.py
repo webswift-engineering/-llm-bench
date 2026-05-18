@@ -12,13 +12,22 @@ from llm_bench.providers.base import get_adapter
 from llm_bench.tasks.loader import TaskSample
 
 
+def _strip_reasoning_blocks(text: str) -> str:
+    """Remove <think>...</think> and similar reasoning tags (Qwen, DeepSeek, etc)."""
+    return re.sub(r"<think[\s\S]*?</think>", "", text, flags=re.IGNORECASE).strip()
+
+
 def score_classification(output: str, expected: str) -> float:
-    """Return 0-100 based on exact label match (case-insensitive)."""
-    normalized = output.strip().lower()
-    # Take first word/line as the label
-    predicted = normalized.split("\n")[0].strip().rstrip(".")
+    """Return 0-100 based on label match (case-insensitive, ignoring reasoning tags)."""
+    cleaned = _strip_reasoning_blocks(output)
+    normalized = cleaned.strip().lower()
     target = expected.strip().lower()
-    return 100.0 if predicted == target or target in predicted else 0.0
+    # Try last line first (reasoning models often answer last), then first
+    lines = [ln.strip().rstrip(".") for ln in normalized.split("\n") if ln.strip()]
+    for line in [lines[-1], lines[0]] if lines else []:
+        if line == target or target in line:
+            return 100.0
+    return 100.0 if target in normalized else 0.0
 
 
 async def score_llm_judge(

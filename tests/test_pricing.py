@@ -17,7 +17,7 @@ def test_get_model_by_id():
 
 
 def test_resolve_alias():
-    assert resolve_model_id("claude-haiku") == "claude-3-5-haiku-20241022"
+    assert resolve_model_id("claude-haiku") == "claude-haiku-4-5-20251001"
     assert resolve_model_id("groq-llama-70b") == "llama-3.3-70b-versatile"
 
 

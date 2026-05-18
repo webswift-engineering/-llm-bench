@@ -24,6 +24,7 @@ class ModelPricing:
     input_per_1m: float
     output_per_1m: float
     context_window: int = 128_000
+    source_url: str = ""
 
     @property
     def avg_per_1m(self) -> float:
@@ -90,6 +91,7 @@ class PricingSnapshot:
                     "input_per_1m": m.input_per_1m,
                     "output_per_1m": m.output_per_1m,
                     "context_window": m.context_window,
+                    "source_url": m.source_url,
                 }
                 for m in self.models
             ],
@@ -107,6 +109,7 @@ class PricingSnapshot:
                     input_per_1m=m["input_per_1m"],
                     output_per_1m=m["output_per_1m"],
                     context_window=m.get("context_window", 128_000),
+                    source_url=m.get("source_url", ""),
                 )
                 for m in data["models"]
             ],
