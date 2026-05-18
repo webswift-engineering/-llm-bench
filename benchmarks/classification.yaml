@@ -1,0 +1,30 @@
+task: classification
+scoring: deterministic
+system_prompt: |
+  You are a text classifier. Read the input and respond with exactly one label
+  from: positive, negative, neutral.
+samples:
+  - input: |
+      This product exceeded all my expectations. Fast shipping and great quality!
+    expected: positive
+  - input: |
+      Terrible experience. Broke after one day and customer service ignored me.
+    expected: negative
+  - input: |
+      The package arrived on Tuesday. It was a medium-sized box.
+    expected: neutral
+  - input: |
+      Absolutely love it! Best purchase I've made this year.
+    expected: positive
+  - input: |
+      Waste of money. Would not recommend to anyone.
+    expected: negative
+  - input: |
+      The meeting is scheduled for 3pm in conference room B.
+    expected: neutral
+  - input: |
+      Outstanding performance and reliability. Five stars without hesitation.
+    expected: positive
+  - input: |
+      Disappointed with the quality. Feels cheap and poorly made.
+    expected: negative

@@ -1,0 +1,44 @@
+task: summarization
+scoring: llm_judge
+judge_model: gpt-4o-mini
+system_prompt: |
+  Summarize the text concisely while preserving key facts. Keep summaries under 80 words.
+samples:
+  - input: |
+      NASA's Perseverance rover has been exploring Mars since February 2021,
+      collecting rock samples and searching for signs of ancient microbial life.
+      In September 2024, scientists announced that a rock sample named "Cheyava Falls"
+      contains organic compounds and mineral structures that could have been formed
+      by living organisms billions of years ago. While not definitive proof of life,
+      the finding represents the most promising evidence yet from Mars exploration.
+      The rover has traveled over 18 miles and cached 24 sample tubes for a future
+      return mission planned for the 2030s.
+    criteria:
+      - Captures the main discovery about Cheyava Falls
+      - Mentions it is not definitive proof of life
+      - Under 80 words
+      - No hallucinated facts
+  - input: |
+      The European Central Bank held interest rates steady at 4.0% in its December
+      meeting, citing persistent inflation concerns despite slowing economic growth
+      across the eurozone. ECB President Christine Lagarde noted that wage growth
+      remains elevated and services inflation is sticky. Markets had priced in a
+      25 basis point cut, causing the euro to strengthen briefly against the dollar
+      before retreating. Analysts now expect the first rate cut in March 2025 at the earliest.
+    criteria:
+      - States the rate decision and level
+      - Mentions inflation as the reason
+      - Notes market reaction
+      - Under 80 words
+  - input: |
+      OpenAI released GPT-4o in May 2024, a multimodal model that processes text,
+      images, and audio with response times averaging under 300 milliseconds.
+      The model scores 88.7% on MMLU and supports 50+ languages. Pricing was set
+      at $5 per million input tokens and $15 per million output tokens, roughly half
+      the cost of GPT-4 Turbo. The release prompted competitors including Google and
+      Anthropic to accelerate their own multimodal roadmaps.
+    criteria:
+      - Identifies GPT-4o and its multimodal capability
+      - Mentions pricing or performance
+      - Notes competitive impact
+      - Under 80 words
