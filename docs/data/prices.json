@@ -5,7 +5,9 @@
     "display_name": "GPT-5.5",
     "input_per_1m": 5.0,
     "output_per_1m": 30.0,
-    "avg_per_1m": 11.25
+    "cached_input_per_1m": 2.5,
+    "avg_per_1m": 11.25,
+    "batch_avg_per_1m": 5.625
   },
   {
     "provider": "openai",
@@ -13,7 +15,9 @@
     "display_name": "GPT-5.4",
     "input_per_1m": 2.5,
     "output_per_1m": 15.0,
-    "avg_per_1m": 5.625
+    "cached_input_per_1m": 1.25,
+    "avg_per_1m": 5.625,
+    "batch_avg_per_1m": 2.812
   },
   {
     "provider": "openai",
@@ -21,7 +25,9 @@
     "display_name": "GPT-5.4 mini",
     "input_per_1m": 0.75,
     "output_per_1m": 4.5,
-    "avg_per_1m": 1.688
+    "cached_input_per_1m": 0.375,
+    "avg_per_1m": 1.688,
+    "batch_avg_per_1m": 0.844
   },
   {
     "provider": "openai",
@@ -29,7 +35,9 @@
     "display_name": "GPT-4o",
     "input_per_1m": 2.5,
     "output_per_1m": 10.0,
-    "avg_per_1m": 4.375
+    "cached_input_per_1m": 1.25,
+    "avg_per_1m": 4.375,
+    "batch_avg_per_1m": 2.188
   },
   {
     "provider": "openai",
@@ -37,7 +45,9 @@
     "display_name": "GPT-4o mini",
     "input_per_1m": 0.15,
     "output_per_1m": 0.6,
-    "avg_per_1m": 0.262
+    "cached_input_per_1m": 0.075,
+    "avg_per_1m": 0.262,
+    "batch_avg_per_1m": 0.131
   },
   {
     "provider": "openai",
@@ -45,7 +55,9 @@
     "display_name": "GPT-4.1",
     "input_per_1m": 2.0,
     "output_per_1m": 8.0,
-    "avg_per_1m": 3.5
+    "cached_input_per_1m": 1.0,
+    "avg_per_1m": 3.5,
+    "batch_avg_per_1m": 1.75
   },
   {
     "provider": "openai",
@@ -53,7 +65,9 @@
     "display_name": "GPT-4.1 mini",
     "input_per_1m": 0.4,
     "output_per_1m": 1.6,
-    "avg_per_1m": 0.7
+    "cached_input_per_1m": 0.2,
+    "avg_per_1m": 0.7,
+    "batch_avg_per_1m": 0.35
   },
   {
     "provider": "openai",
@@ -61,7 +75,9 @@
     "display_name": "o3-mini",
     "input_per_1m": 1.1,
     "output_per_1m": 4.4,
-    "avg_per_1m": 1.925
+    "cached_input_per_1m": 0.55,
+    "avg_per_1m": 1.925,
+    "batch_avg_per_1m": 0.963
   },
   {
     "provider": "anthropic",
@@ -69,7 +85,9 @@
     "display_name": "Claude Opus 4.7",
     "input_per_1m": 5.0,
     "output_per_1m": 25.0,
-    "avg_per_1m": 10.0
+    "cached_input_per_1m": 0.5,
+    "avg_per_1m": 10.0,
+    "batch_avg_per_1m": 5.0
   },
   {
     "provider": "anthropic",
@@ -77,7 +95,9 @@
     "display_name": "Claude Sonnet 4.6",
     "input_per_1m": 3.0,
     "output_per_1m": 15.0,
-    "avg_per_1m": 6.0
+    "cached_input_per_1m": 0.3,
+    "avg_per_1m": 6.0,
+    "batch_avg_per_1m": 3.0
   },
   {
     "provider": "anthropic",
@@ -85,7 +105,9 @@
     "display_name": "Claude Opus 4.5",
     "input_per_1m": 5.0,
     "output_per_1m": 25.0,
-    "avg_per_1m": 10.0
+    "cached_input_per_1m": 0.5,
+    "avg_per_1m": 10.0,
+    "batch_avg_per_1m": 5.0
   },
   {
     "provider": "anthropic",
@@ -93,7 +115,9 @@
     "display_name": "Claude Sonnet 4.5",
     "input_per_1m": 3.0,
     "output_per_1m": 15.0,
-    "avg_per_1m": 6.0
+    "cached_input_per_1m": 0.3,
+    "avg_per_1m": 6.0,
+    "batch_avg_per_1m": 3.0
   },
   {
     "provider": "anthropic",
@@ -101,7 +125,9 @@
     "display_name": "Claude Haiku 4.5",
     "input_per_1m": 1.0,
     "output_per_1m": 5.0,
-    "avg_per_1m": 2.0
+    "cached_input_per_1m": 0.1,
+    "avg_per_1m": 2.0,
+    "batch_avg_per_1m": 1.0
   },
   {
     "provider": "anthropic",
@@ -109,7 +135,9 @@
     "display_name": "Claude Opus 4.1",
     "input_per_1m": 15.0,
     "output_per_1m": 75.0,
-    "avg_per_1m": 30.0
+    "cached_input_per_1m": 1.5,
+    "avg_per_1m": 30.0,
+    "batch_avg_per_1m": 15.0
   },
   {
     "provider": "groq",
@@ -117,7 +145,9 @@
     "display_name": "GPT OSS 120B (Groq)",
     "input_per_1m": 0.15,
     "output_per_1m": 0.6,
-    "avg_per_1m": 0.262
+    "cached_input_per_1m": null,
+    "avg_per_1m": 0.262,
+    "batch_avg_per_1m": 0.131
   },
   {
     "provider": "groq",
@@ -125,7 +155,9 @@
     "display_name": "GPT OSS 20B (Groq)",
     "input_per_1m": 0.075,
     "output_per_1m": 0.3,
-    "avg_per_1m": 0.131
+    "cached_input_per_1m": null,
+    "avg_per_1m": 0.131,
+    "batch_avg_per_1m": 0.066
   },
   {
     "provider": "groq",
@@ -133,7 +165,9 @@
     "display_name": "Llama 4 Scout 17B (Groq)",
     "input_per_1m": 0.11,
     "output_per_1m": 0.34,
-    "avg_per_1m": 0.168
+    "cached_input_per_1m": null,
+    "avg_per_1m": 0.168,
+    "batch_avg_per_1m": 0.084
   },
   {
     "provider": "groq",
@@ -141,7 +175,9 @@
     "display_name": "Qwen3 32B (Groq)",
     "input_per_1m": 0.29,
     "output_per_1m": 0.59,
-    "avg_per_1m": 0.365
+    "cached_input_per_1m": null,
+    "avg_per_1m": 0.365,
+    "batch_avg_per_1m": 0.182
   },
   {
     "provider": "groq",
@@ -149,7 +185,9 @@
     "display_name": "Llama 3.3 70B (Groq)",
     "input_per_1m": 0.59,
     "output_per_1m": 0.79,
-    "avg_per_1m": 0.64
+    "cached_input_per_1m": null,
+    "avg_per_1m": 0.64,
+    "batch_avg_per_1m": 0.32
   },
   {
     "provider": "groq",
@@ -157,6 +195,8 @@
     "display_name": "Llama 3.1 8B (Groq)",
     "input_per_1m": 0.05,
     "output_per_1m": 0.08,
-    "avg_per_1m": 0.058
+    "cached_input_per_1m": null,
+    "avg_per_1m": 0.058,
+    "batch_avg_per_1m": 0.029
   }
 ]

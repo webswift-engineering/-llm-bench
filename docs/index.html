@@ -8,17 +8,32 @@
   <style>
     :root {
       --bg: #0b1120; --card: #131c31; --text: #e2e8f0; --muted: #94a3b8;
-      --accent: #6366f1; --green: #22c55e; --border: #1e293b;
+      --accent: #818cf8; --green: #10b981; --border: #1e293b;
+      --amber: #f59e0b; --indigo: #6366f1;
     }
     * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
     body {
       font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
       background: var(--bg); color: var(--text); margin: 0; line-height: 1.5;
     }
-    .wrap { max-width: 960px; margin: 0 auto; padding: 2rem 1.25rem 4rem; }
+    .wrap { max-width: 1100px; margin: 0 auto; padding: 2rem 1.25rem 4rem; }
     h1 { font-size: 1.75rem; margin: 0 0 0.25rem; }
     .lede { color: var(--muted); margin: 0 0 2rem; }
     .meta { font-size: 0.85rem; color: var(--muted); margin-bottom: 2rem; }
+    .top-nav {
+      position: sticky; top: 0; z-index: 10; display: flex; flex-wrap: wrap; gap: 0.5rem;
+      margin: 0 -0.25rem 1.5rem; padding: 0.65rem 0.25rem;
+      background: color-mix(in srgb, var(--bg) 88%, transparent);
+      backdrop-filter: blur(12px);
+    }
+    .top-nav a {
+      border: 1px solid var(--border); border-radius: 999px; color: var(--muted);
+      padding: 0.3rem 0.7rem; text-decoration: none; font-size: 0.82rem;
+    }
+    .top-nav a:hover, .top-nav a.is-active {
+      border-color: var(--accent); color: var(--text); background: rgba(129, 140, 248, 0.12);
+    }
     .card {
       background: var(--card); border: 1px solid var(--border);
       border-radius: 12px; padding: 1.25rem 1.5rem; margin-bottom: 1.5rem;
@@ -27,14 +42,48 @@
     table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
     th, td { text-align: left; padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--border); }
     th { color: var(--muted); font-weight: 500; }
+    tbody tr:hover { background: rgba(255, 255, 255, 0.05); }
+    tr[hidden] { display: none; }
+    th button {
+      appearance: none; border: 0; background: transparent; color: inherit; cursor: pointer;
+      font: inherit; padding: 0; text-align: left; white-space: nowrap;
+    }
+    th button:hover, th button.is-sorted { color: var(--text); }
+    .table-wrap { overflow-x: auto; }
     .highlight { color: var(--green); font-weight: 600; }
     .muted { color: var(--muted); }
     code { background: #1e293b; padding: 0.15rem 0.4rem; border-radius: 4px; font-size: 0.85em; }
     .chart-wrap { margin-top: 1rem; overflow-x: auto; }
-    .pareto-chart { width: 100%; max-width: 640px; height: auto; }
+    .pareto-chart { width: 100%; max-width: 720px; height: auto; }
+    .chart-point--frontier { filter: drop-shadow(0 0 4px rgba(226, 232, 240, 0.5)); }
+    .point-label, .legend-label { fill: #e2e8f0; font-size: 11px; font-weight: 600; }
+    .legend-label { fill: #cbd5e1; text-transform: capitalize; }
     footer { margin-top: 2rem; font-size: 0.8rem; color: var(--muted); }
     a { color: var(--accent); }
     .small { font-size: 0.85rem; margin: -0.5rem 0 1rem; }
+    .filter-bar, .calculator-controls {
+      display: flex; flex-wrap: wrap; gap: 0.8rem; align-items: end; margin: 0 0 1rem;
+      padding: 0.85rem; border: 1px solid var(--border); border-radius: 10px;
+      background: rgba(15, 23, 42, 0.45);
+    }
+    .filter-group { display: grid; gap: 0.35rem; }
+    .filter-label, .filter-field span, .filter-field {
+      color: var(--muted); font-size: 0.78rem; font-weight: 600;
+    }
+    .chip-group { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+    .chip {
+      border: 1px solid var(--border); border-radius: 999px; background: transparent;
+      color: var(--muted); cursor: pointer; padding: 0.3rem 0.6rem; text-transform: capitalize;
+    }
+    .chip.is-active { border-color: var(--accent); color: var(--text); background: rgba(99, 102, 241, 0.18); }
+    input {
+      border: 1px solid var(--border); border-radius: 8px; background: #0f172a; color: var(--text);
+      padding: 0.45rem 0.55rem;
+    }
+    input[type="range"] { min-width: 160px; padding: 0; }
+    .filter-field { display: grid; gap: 0.35rem; }
+    .filter-field--wide { min-width: 200px; }
+    .calculator-controls label { display: grid; gap: 0.35rem; color: var(--muted); font-size: 0.78rem; font-weight: 600; }
     .badge {
       display: inline-block; font-size: 0.7rem; padding: 0.15rem 0.5rem;
       border-radius: 999px; vertical-align: middle; margin-left: 0.5rem;
@@ -42,6 +91,13 @@
     }
     .badge--live { background: rgba(34, 197, 94, 0.15); color: #4ade80; }
     .badge--ref { background: rgba(148, 163, 184, 0.18); color: #cbd5e1; }
+    @media (max-width: 768px) {
+      .wrap { padding-inline: 1rem; }
+      th:first-child, td:first-child {
+        position: sticky; left: 0; z-index: 1; background: var(--card);
+      }
+      .top-nav { top: 0; }
+    }
   </style>
 </head>
 <body>
@@ -49,59 +105,166 @@
     <header>
       <h1>llm-bench</h1>
       <p class="lede">Cost, latency, and quality across LLM providers.</p>
-      <p class="meta">Dashboard updated: 2026-05-18 14:19 UTC
+      <p class="meta">Dashboard updated: 2026-05-18 16:31 UTC
          · Pricing snapshot: 2026-05-18</p>
     </header>
 
+    <nav class="top-nav" aria-label="Dashboard sections">
+      <a href="#calculator">Calculator</a>
+      <a href="#task-classification">Classification</a>
+<a href="#task-summarization">Summarization</a>
+      <a href="#pricing">Pricing</a>
+    </nav>
+
+    <section class="card calculator" id="calculator">
+      <h2>Agentic cost calculator</h2>
+      <p class="muted small">Estimate monthly spend for multi-turn tasks using provider
+      input/output token pricing. Defaults assume 100 tasks/day, 5K input tokens, and
+      2K output tokens per task.</p>
+      <div class="calculator-controls">
+        <label>Tasks per day
+          <input id="tasks-per-day" type="number" min="0" step="1" value="100"/>
+        </label>
+        <label>Avg input tokens/task
+          <input id="input-tokens" type="number" min="0" step="100" value="5000"/>
+        </label>
+        <label>Avg output tokens/task
+          <input id="output-tokens" type="number" min="0" step="100" value="2000"/>
+        </label>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Model</th><th>Provider</th><th>Estimated monthly cost</th></tr></thead>
+          <tbody><tr data-provider='groq' data-input-price='0.050000' data-output-price='0.080000'><td>Llama 3.1 8B (Groq)</td><td>groq</td><td class='calculator-cost'>$1.23</td></tr>
+<tr data-provider='groq' data-input-price='0.075000' data-output-price='0.300000'><td>GPT OSS 20B (Groq)</td><td>groq</td><td class='calculator-cost'>$2.92</td></tr>
+<tr data-provider='groq' data-input-price='0.110000' data-output-price='0.340000'><td>Llama 4 Scout 17B (Groq)</td><td>groq</td><td class='calculator-cost'>$3.69</td></tr>
+<tr data-provider='openai' data-input-price='0.150000' data-output-price='0.600000'><td>GPT-4o mini</td><td>openai</td><td class='calculator-cost'>$5.85</td></tr>
+<tr data-provider='groq' data-input-price='0.150000' data-output-price='0.600000'><td>GPT OSS 120B (Groq)</td><td>groq</td><td class='calculator-cost'>$5.85</td></tr>
+<tr data-provider='groq' data-input-price='0.290000' data-output-price='0.590000'><td>Qwen3 32B (Groq)</td><td>groq</td><td class='calculator-cost'>$7.89</td></tr>
+<tr data-provider='groq' data-input-price='0.590000' data-output-price='0.790000'><td>Llama 3.3 70B (Groq)</td><td>groq</td><td class='calculator-cost'>$13.59</td></tr>
+<tr data-provider='openai' data-input-price='0.400000' data-output-price='1.600000'><td>GPT-4.1 mini</td><td>openai</td><td class='calculator-cost'>$15.60</td></tr>
+<tr data-provider='openai' data-input-price='0.750000' data-output-price='4.500000'><td>GPT-5.4 mini</td><td>openai</td><td class='calculator-cost'>$38.25</td></tr>
+<tr data-provider='openai' data-input-price='1.100000' data-output-price='4.400000'><td>o3-mini</td><td>openai</td><td class='calculator-cost'>$42.90</td></tr>
+<tr data-provider='anthropic' data-input-price='1.000000' data-output-price='5.000000'><td>Claude Haiku 4.5</td><td>anthropic</td><td class='calculator-cost'>$45.00</td></tr>
+<tr data-provider='openai' data-input-price='2.000000' data-output-price='8.000000'><td>GPT-4.1</td><td>openai</td><td class='calculator-cost'>$78.00</td></tr>
+<tr data-provider='openai' data-input-price='2.500000' data-output-price='10.000000'><td>GPT-4o</td><td>openai</td><td class='calculator-cost'>$97.50</td></tr>
+<tr data-provider='openai' data-input-price='2.500000' data-output-price='15.000000'><td>GPT-5.4</td><td>openai</td><td class='calculator-cost'>$127.50</td></tr>
+<tr data-provider='anthropic' data-input-price='3.000000' data-output-price='15.000000'><td>Claude Sonnet 4.6</td><td>anthropic</td><td class='calculator-cost'>$135.00</td></tr>
+<tr data-provider='anthropic' data-input-price='3.000000' data-output-price='15.000000'><td>Claude Sonnet 4.5</td><td>anthropic</td><td class='calculator-cost'>$135.00</td></tr>
+<tr data-provider='anthropic' data-input-price='5.000000' data-output-price='25.000000'><td>Claude Opus 4.7</td><td>anthropic</td><td class='calculator-cost'>$225.00</td></tr>
+<tr data-provider='anthropic' data-input-price='5.000000' data-output-price='25.000000'><td>Claude Opus 4.5</td><td>anthropic</td><td class='calculator-cost'>$225.00</td></tr>
+<tr data-provider='openai' data-input-price='5.000000' data-output-price='30.000000'><td>GPT-5.5</td><td>openai</td><td class='calculator-cost'>$255.00</td></tr>
+<tr data-provider='anthropic' data-input-price='15.000000' data-output-price='75.000000'><td>Claude Opus 4.1</td><td>anthropic</td><td class='calculator-cost'>$675.00</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+
     <section id="benchmarks">
-      <h2 style="margin-bottom:1rem;">Benchmark results <span class="badge badge--live">live</span></h2>
+      <h2 style="margin-bottom:1rem;">Benchmark results
+        <span class="badge badge--live" title="Benchmarks re-run daily when publishing succeeds.">
+          updated daily
+        </span>
+      </h2>
       <p class="muted small">Quality, latency, and cost measured by running each model
       against the task suites in <code>benchmarks/</code>. Cost reflects observed token
-      usage at provider list prices.</p>
+      usage at provider list prices. Tags: <strong>value</strong> means Pareto-optimal;
+      <strong>cheapest</strong> means lowest cost in the category with quality ≥ 80.</p>
       <section class="card" id="task-classification">
               <h2>Classification</h2>
-              <table>
+              <div class="benchmark-card" data-table-id="classification">
+      <div class="filter-bar" aria-label="Filters for classification benchmark">
+        <div class="filter-group">
+          <span class="filter-label">Provider</span>
+          <div class="chip-group"><button type='button' class='chip is-active' data-provider='anthropic'>anthropic</button><button type='button' class='chip is-active' data-provider='groq'>groq</button><button type='button' class='chip is-active' data-provider='openai'>openai</button></div>
+        </div>
+        <label class="filter-field">Min cost
+          <input type="number" class="filter-min-cost" value="0.04" min="0" step="0.01"/>
+        </label>
+        <label class="filter-field">Max cost
+          <input type="number" class="filter-max-cost" value="18.75" min="0" step="0.01"/>
+        </label>
+        <label class="filter-field filter-field--wide">
+          <span>Quality ≥ <output class="quality-output">0</output></span>
+          <input type="range" class="filter-min-quality" value="0" min="0" max="100" step="1"/>
+        </label>
+      </div>
+      <div class="table-wrap"><table class="benchmark-table">
       <thead><tr>
-        <th>Model</th><th>Provider</th><th>Quality</th>
-        <th>Latency p50</th><th>Cost/1K</th><th>Tags</th>
+        <th><button type="button" data-sort="model" data-type="text">Model</button></th>
+        <th><button type="button" data-sort="provider" data-type="text">Provider</button></th>
+        <th><button type="button" data-sort="quality" data-type="number">Quality</button></th>
+        <th><button type="button" data-sort="latency" data-type="number">Latency p50</button></th>
+        <th><button type="button" data-sort="cost" data-type="number">Cost / 1K reqs</button></th>
+        <th><button type="button" data-sort="value" data-type="number" data-default-sort="desc">
+          Quality / $</button></th>
+        <th><button type="button" data-sort="tags" data-type="text">Tags</button></th>
       </tr></thead>
-      <tbody><tr><td>GPT-5.5</td><td>openai</td><td>100</td><td>2062ms</td><td>$7.00</td><td>—</td></tr><tr><td>GPT-5.4</td><td>openai</td><td>100</td><td>1181ms</td><td>$3.50</td><td>—</td></tr><tr><td>GPT-5.4 mini</td><td>openai</td><td>100</td><td>1122ms</td><td>$1.05</td><td>—</td></tr><tr><td>GPT-4o</td><td>openai</td><td>100</td><td>990ms</td><td>$2.75</td><td>—</td></tr><tr><td>GPT-4o mini</td><td>openai</td><td>100</td><td>1046ms</td><td>$0.17</td><td>value, cheapest</td></tr><tr><td>GPT-4.1</td><td>openai</td><td>100</td><td>1289ms</td><td>$2.20</td><td>—</td></tr><tr><td>GPT-4.1 mini</td><td>openai</td><td>100</td><td>1169ms</td><td>$0.44</td><td>value</td></tr><tr><td>o3-mini</td><td>openai</td><td>100</td><td>1632ms</td><td>$1.21</td><td>—</td></tr><tr><td>Claude Opus 4.7</td><td>anthropic</td><td>100</td><td>2452ms</td><td>$6.25</td><td>—</td></tr><tr><td>Claude Sonnet 4.6</td><td>anthropic</td><td>100</td><td>2019ms</td><td>$3.75</td><td>—</td></tr><tr><td>Claude Opus 4.5</td><td>anthropic</td><td>100</td><td>2256ms</td><td>$6.25</td><td>—</td></tr><tr><td>Claude Sonnet 4.5</td><td>anthropic</td><td>100</td><td>2112ms</td><td>$3.75</td><td>—</td></tr><tr><td>Claude Haiku 4.5</td><td>anthropic</td><td>100</td><td>1286ms</td><td>$1.25</td><td>—</td></tr><tr><td>Claude Opus 4.1</td><td>anthropic</td><td>100</td><td>2381ms</td><td>$18.75</td><td>—</td></tr><tr><td>GPT OSS 120B (Groq)</td><td>groq</td><td>100</td><td>823ms</td><td>$0.17</td><td>value, cheapest</td></tr><tr><td>GPT OSS 20B (Groq)</td><td>groq</td><td>100</td><td>722ms</td><td>$0.08</td><td>value, cheapest</td></tr><tr><td>Llama 4 Scout 17B (Groq)</td><td>groq</td><td>100</td><td>812ms</td><td>$0.11</td><td>value, cheapest</td></tr><tr><td>Qwen3 32B (Groq)</td><td>groq</td><td>100</td><td>1070ms</td><td>$0.23</td><td>value</td></tr><tr><td>Llama 3.3 70B (Groq)</td><td>groq</td><td>100</td><td>924ms</td><td>$0.41</td><td>value</td></tr><tr><td>Llama 3.1 8B (Groq)</td><td>groq</td><td>100</td><td>904ms</td><td>$0.04</td><td>value, cheapest</td></tr></tbody>
-    </table>
-              <div class="chart-wrap"><svg viewBox="0 0 640 360" class="pareto-chart" role="img"
-      aria-label="Cost vs quality chart">
-      <line x1="48" y1="312" x2="592" y2="312"
-            stroke="#334155"/>
-      <line x1="48" y1="48" x2="48" y2="312" stroke="#334155"/>
-      <text x="320" y="352" text-anchor="middle" fill="#94a3b8" font-size="12">
-        Cost per 1K requests ($)</text>
-      <text x="14" y="180" text-anchor="middle" fill="#94a3b8" font-size="12"
-            transform="rotate(-90 14 180)">Quality</text>
-      <polyline points="93.3,180.0" fill="none" stroke="#22c55e" stroke-width="2"
+      <tbody><tr data-default-index='0' data-provider='groq' data-cost='0.040000' data-quality='100.000000'><td data-value='llama 3.1 8b (groq)'>Llama 3.1 8B (Groq)</td><td data-value='groq'>groq</td><td data-value='100.000000'>100</td><td data-value='904.300000'>904ms</td><td data-value='0.040000'>$0.04</td><td data-value='2500.000000'>2500.0</td><td data-value='value, cheapest'>value, cheapest</td></tr><tr data-default-index='1' data-provider='groq' data-cost='0.080000' data-quality='100.000000'><td data-value='gpt oss 20b (groq)'>GPT OSS 20B (Groq)</td><td data-value='groq'>groq</td><td data-value='100.000000'>100</td><td data-value='721.700000'>722ms</td><td data-value='0.080000'>$0.08</td><td data-value='1250.000000'>1250.0</td><td data-value='value, cheapest'>value, cheapest</td></tr><tr data-default-index='2' data-provider='groq' data-cost='0.110000' data-quality='100.000000'><td data-value='llama 4 scout 17b (groq)'>Llama 4 Scout 17B (Groq)</td><td data-value='groq'>groq</td><td data-value='100.000000'>100</td><td data-value='812.000000'>812ms</td><td data-value='0.110000'>$0.11</td><td data-value='909.090909'>909.1</td><td data-value='value, cheapest'>value, cheapest</td></tr><tr data-default-index='3' data-provider='openai' data-cost='0.170000' data-quality='100.000000'><td data-value='gpt-4o mini'>GPT-4o mini</td><td data-value='openai'>openai</td><td data-value='100.000000'>100</td><td data-value='1046.000000'>1046ms</td><td data-value='0.170000'>$0.17</td><td data-value='588.235294'>588.2</td><td data-value='value, cheapest'>value, cheapest</td></tr><tr data-default-index='4' data-provider='groq' data-cost='0.170000' data-quality='100.000000'><td data-value='gpt oss 120b (groq)'>GPT OSS 120B (Groq)</td><td data-value='groq'>groq</td><td data-value='100.000000'>100</td><td data-value='823.200000'>823ms</td><td data-value='0.170000'>$0.17</td><td data-value='588.235294'>588.2</td><td data-value='value, cheapest'>value, cheapest</td></tr><tr data-default-index='5' data-provider='groq' data-cost='0.230000' data-quality='100.000000'><td data-value='qwen3 32b (groq)'>Qwen3 32B (Groq)</td><td data-value='groq'>groq</td><td data-value='100.000000'>100</td><td data-value='1070.400000'>1070ms</td><td data-value='0.230000'>$0.23</td><td data-value='434.782609'>434.8</td><td data-value='value'>value</td></tr><tr data-default-index='6' data-provider='groq' data-cost='0.410000' data-quality='100.000000'><td data-value='llama 3.3 70b (groq)'>Llama 3.3 70B (Groq)</td><td data-value='groq'>groq</td><td data-value='100.000000'>100</td><td data-value='923.800000'>924ms</td><td data-value='0.410000'>$0.41</td><td data-value='243.902439'>243.9</td><td data-value='value'>value</td></tr><tr data-default-index='7' data-provider='openai' data-cost='0.440000' data-quality='100.000000'><td data-value='gpt-4.1 mini'>GPT-4.1 mini</td><td data-value='openai'>openai</td><td data-value='100.000000'>100</td><td data-value='1169.200000'>1169ms</td><td data-value='0.440000'>$0.44</td><td data-value='227.272727'>227.3</td><td data-value='value'>value</td></tr><tr data-default-index='8' data-provider='openai' data-cost='1.050000' data-quality='100.000000'><td data-value='gpt-5.4 mini'>GPT-5.4 mini</td><td data-value='openai'>openai</td><td data-value='100.000000'>100</td><td data-value='1122.300000'>1122ms</td><td data-value='1.050000'>$1.05</td><td data-value='95.238095'>95.2</td><td data-value=''></td></tr><tr data-default-index='9' data-provider='openai' data-cost='1.210000' data-quality='100.000000'><td data-value='o3-mini'>o3-mini</td><td data-value='openai'>openai</td><td data-value='100.000000'>100</td><td data-value='1631.900000'>1632ms</td><td data-value='1.210000'>$1.21</td><td data-value='82.644628'>82.6</td><td data-value=''></td></tr><tr data-default-index='10' data-provider='anthropic' data-cost='1.250000' data-quality='100.000000'><td data-value='claude haiku 4.5'>Claude Haiku 4.5</td><td data-value='anthropic'>anthropic</td><td data-value='100.000000'>100</td><td data-value='1286.400000'>1286ms</td><td data-value='1.250000'>$1.25</td><td data-value='80.000000'>80.0</td><td data-value=''></td></tr><tr data-default-index='11' data-provider='openai' data-cost='2.200000' data-quality='100.000000'><td data-value='gpt-4.1'>GPT-4.1</td><td data-value='openai'>openai</td><td data-value='100.000000'>100</td><td data-value='1288.700000'>1289ms</td><td data-value='2.200000'>$2.20</td><td data-value='45.454545'>45.5</td><td data-value=''></td></tr><tr data-default-index='12' data-provider='openai' data-cost='2.750000' data-quality='100.000000'><td data-value='gpt-4o'>GPT-4o</td><td data-value='openai'>openai</td><td data-value='100.000000'>100</td><td data-value='989.800000'>990ms</td><td data-value='2.750000'>$2.75</td><td data-value='36.363636'>36.4</td><td data-value=''></td></tr><tr data-default-index='13' data-provider='openai' data-cost='3.500000' data-quality='100.000000'><td data-value='gpt-5.4'>GPT-5.4</td><td data-value='openai'>openai</td><td data-value='100.000000'>100</td><td data-value='1181.000000'>1181ms</td><td data-value='3.500000'>$3.50</td><td data-value='28.571429'>28.6</td><td data-value=''></td></tr><tr data-default-index='14' data-provider='anthropic' data-cost='3.750000' data-quality='100.000000'><td data-value='claude sonnet 4.6'>Claude Sonnet 4.6</td><td data-value='anthropic'>anthropic</td><td data-value='100.000000'>100</td><td data-value='2019.000000'>2019ms</td><td data-value='3.750000'>$3.75</td><td data-value='26.666667'>26.7</td><td data-value=''></td></tr><tr data-default-index='15' data-provider='anthropic' data-cost='3.750000' data-quality='100.000000'><td data-value='claude sonnet 4.5'>Claude Sonnet 4.5</td><td data-value='anthropic'>anthropic</td><td data-value='100.000000'>100</td><td data-value='2112.400000'>2112ms</td><td data-value='3.750000'>$3.75</td><td data-value='26.666667'>26.7</td><td data-value=''></td></tr><tr data-default-index='16' data-provider='anthropic' data-cost='6.250000' data-quality='100.000000'><td data-value='claude opus 4.7'>Claude Opus 4.7</td><td data-value='anthropic'>anthropic</td><td data-value='100.000000'>100</td><td data-value='2452.400000'>2452ms</td><td data-value='6.250000'>$6.25</td><td data-value='16.000000'>16.0</td><td data-value=''></td></tr><tr data-default-index='17' data-provider='anthropic' data-cost='6.250000' data-quality='100.000000'><td data-value='claude opus 4.5'>Claude Opus 4.5</td><td data-value='anthropic'>anthropic</td><td data-value='100.000000'>100</td><td data-value='2255.500000'>2256ms</td><td data-value='6.250000'>$6.25</td><td data-value='16.000000'>16.0</td><td data-value=''></td></tr><tr data-default-index='18' data-provider='openai' data-cost='7.000000' data-quality='100.000000'><td data-value='gpt-5.5'>GPT-5.5</td><td data-value='openai'>openai</td><td data-value='100.000000'>100</td><td data-value='2061.500000'>2062ms</td><td data-value='7.000000'>$7.00</td><td data-value='14.285714'>14.3</td><td data-value=''></td></tr><tr data-default-index='19' data-provider='anthropic' data-cost='18.750000' data-quality='100.000000'><td data-value='claude opus 4.1'>Claude Opus 4.1</td><td data-value='anthropic'>anthropic</td><td data-value='100.000000'>100</td><td data-value='2381.400000'>2381ms</td><td data-value='18.750000'>$18.75</td><td data-value='5.333333'>5.3</td><td data-value=''></td></tr></tbody>
+    </table></div></div>
+              <div class="chart-wrap"><svg viewBox="0 0 720 420" class="pareto-chart" role="img"
+      aria-label="Cost vs quality chart using a logarithmic cost scale">
+      <line x1="56" y1="362" x2="684"
+            y2="362" stroke="#334155"/>
+      <line x1="56" y1="48" x2="56"
+            y2="362" stroke="#334155"/>
+      <g><line x1="56.0" y1="362.0" x2="56.0" y2="367.0" stroke="#475569"/><text x="56.0" y="382.0" text-anchor="middle" fill="#94a3b8" font-size="11">$0.04</text></g><g><line x1="370.0" y1="362.0" x2="370.0" y2="367.0" stroke="#475569"/><text x="370.0" y="382.0" text-anchor="middle" fill="#94a3b8" font-size="11">$0.87</text></g><g><line x1="684.0" y1="362.0" x2="684.0" y2="367.0" stroke="#475569"/><text x="684.0" y="382.0" text-anchor="middle" fill="#94a3b8" font-size="11">$19</text></g>
+      <text x="360" y="412" text-anchor="middle" fill="#94a3b8" font-size="12">
+        Cost / 1K reqs ($, log scale)</text>
+      <text x="16" y="210" text-anchor="middle" fill="#94a3b8" font-size="12"
+            transform="rotate(-90 16 210)">Quality</text>
+      <polyline points="56.0,205.0" fill="none" stroke="#e2e8f0" stroke-width="2"
                 stroke-dasharray="5,4"/>
-      <circle cx="262.0" cy="180.0" r="6" fill="#6366f1" stroke="#0f172a" stroke-width="1"><title>GPT-5.5: 100% @ $7.00/1K</title></circle><circle cx="177.2" cy="180.0" r="6" fill="#6366f1" stroke="#0f172a" stroke-width="1"><title>GPT-5.4: 100% @ $3.50/1K</title></circle><circle cx="117.8" cy="180.0" r="6" fill="#6366f1" stroke="#0f172a" stroke-width="1"><title>GPT-5.4 mini: 100% @ $1.05/1K</title></circle><circle cx="159.0" cy="180.0" r="6" fill="#6366f1" stroke="#0f172a" stroke-width="1"><title>GPT-4o: 100% @ $2.75/1K</title></circle><circle cx="96.5" cy="180.0" r="6" fill="#6366f1" stroke="#0f172a" stroke-width="1"><title>GPT-4o mini: 100% @ $0.17/1K</title></circle><circle cx="145.7" cy="180.0" r="6" fill="#6366f1" stroke="#0f172a" stroke-width="1"><title>GPT-4.1: 100% @ $2.20/1K</title></circle><circle cx="103.0" cy="180.0" r="6" fill="#6366f1" stroke="#0f172a" stroke-width="1"><title>GPT-4.1 mini: 100% @ $0.44/1K</title></circle><circle cx="121.7" cy="180.0" r="6" fill="#6366f1" stroke="#0f172a" stroke-width="1"><title>o3-mini: 100% @ $1.21/1K</title></circle><circle cx="243.8" cy="180.0" r="6" fill="#6366f1" stroke="#0f172a" stroke-width="1"><title>Claude Opus 4.7: 100% @ $6.25/1K</title></circle><circle cx="183.2" cy="180.0" r="6" fill="#6366f1" stroke="#0f172a" stroke-width="1"><title>Claude Sonnet 4.6: 100% @ $3.75/1K</title></circle><circle cx="243.8" cy="180.0" r="6" fill="#6366f1" stroke="#0f172a" stroke-width="1"><title>Claude Opus 4.5: 100% @ $6.25/1K</title></circle><circle cx="183.2" cy="180.0" r="6" fill="#6366f1" stroke="#0f172a" stroke-width="1"><title>Claude Sonnet 4.5: 100% @ $3.75/1K</title></circle><circle cx="122.7" cy="180.0" r="6" fill="#6366f1" stroke="#0f172a" stroke-width="1"><title>Claude Haiku 4.5: 100% @ $1.25/1K</title></circle><circle cx="546.7" cy="180.0" r="6" fill="#6366f1" stroke="#0f172a" stroke-width="1"><title>Claude Opus 4.1: 100% @ $18.75/1K</title></circle><circle cx="96.5" cy="180.0" r="6" fill="#6366f1" stroke="#0f172a" stroke-width="1"><title>GPT OSS 120B (Groq): 100% @ $0.17/1K</title></circle><circle cx="94.3" cy="180.0" r="6" fill="#6366f1" stroke="#0f172a" stroke-width="1"><title>GPT OSS 20B (Groq): 100% @ $0.08/1K</title></circle><circle cx="95.0" cy="180.0" r="6" fill="#6366f1" stroke="#0f172a" stroke-width="1"><title>Llama 4 Scout 17B (Groq): 100% @ $0.11/1K</title></circle><circle cx="97.9" cy="180.0" r="6" fill="#6366f1" stroke="#0f172a" stroke-width="1"><title>Qwen3 32B (Groq): 100% @ $0.23/1K</title></circle><circle cx="102.3" cy="180.0" r="6" fill="#6366f1" stroke="#0f172a" stroke-width="1"><title>Llama 3.3 70B (Groq): 100% @ $0.41/1K</title></circle><circle cx="93.3" cy="180.0" r="6" fill="#22c55e" stroke="#0f172a" stroke-width="1"><title>Llama 3.1 8B (Groq): 100% @ $0.04/1K</title></circle>
+      <g class="chart-legend" transform="translate(570, 56)"><g transform="translate(0,0)"><circle cx="0" cy="0" r="5" fill="#f59e0b"/><text x="12" y="4" class="legend-label">anthropic</text></g><g transform="translate(0,22)"><circle cx="0" cy="0" r="5" fill="#6366f1"/><text x="12" y="4" class="legend-label">groq</text></g><g transform="translate(0,44)"><circle cx="0" cy="0" r="5" fill="#10b981"/><text x="12" y="4" class="legend-label">openai</text></g></g>
+      <circle class="chart-point" cx="583.4" cy="205.0" r="6.5" fill="#10b981" stroke="#0f172a" stroke-width="1.5"><title>GPT-5.5: 100% @ $7.00/1K</title></circle><circle class="chart-point" cx="512.6" cy="205.0" r="6.5" fill="#10b981" stroke="#0f172a" stroke-width="1.5"><title>GPT-5.4: 100% @ $3.50/1K</title></circle><circle class="chart-point" cx="389.7" cy="205.0" r="6.5" fill="#10b981" stroke="#0f172a" stroke-width="1.5"><title>GPT-5.4 mini: 100% @ $1.05/1K</title></circle><circle class="chart-point" cx="488.0" cy="205.0" r="6.5" fill="#10b981" stroke="#0f172a" stroke-width="1.5"><title>GPT-4o: 100% @ $2.75/1K</title></circle><circle class="chart-point" cx="203.7" cy="205.0" r="6.5" fill="#10b981" stroke="#0f172a" stroke-width="1.5"><title>GPT-4o mini: 100% @ $0.17/1K</title></circle><circle class="chart-point" cx="465.2" cy="205.0" r="6.5" fill="#10b981" stroke="#0f172a" stroke-width="1.5"><title>GPT-4.1: 100% @ $2.20/1K</title></circle><circle class="chart-point" cx="300.9" cy="205.0" r="6.5" fill="#10b981" stroke="#0f172a" stroke-width="1.5"><title>GPT-4.1 mini: 100% @ $0.44/1K</title></circle><circle class="chart-point" cx="404.2" cy="205.0" r="6.5" fill="#10b981" stroke="#0f172a" stroke-width="1.5"><title>o3-mini: 100% @ $1.21/1K</title></circle><circle class="chart-point" cx="571.8" cy="205.0" r="6.5" fill="#f59e0b" stroke="#0f172a" stroke-width="1.5"><title>Claude Opus 4.7: 100% @ $6.25/1K</title></circle><circle class="chart-point" cx="519.7" cy="205.0" r="6.5" fill="#f59e0b" stroke="#0f172a" stroke-width="1.5"><title>Claude Sonnet 4.6: 100% @ $3.75/1K</title></circle><circle class="chart-point" cx="571.8" cy="205.0" r="6.5" fill="#f59e0b" stroke="#0f172a" stroke-width="1.5"><title>Claude Opus 4.5: 100% @ $6.25/1K</title></circle><circle class="chart-point" cx="519.7" cy="205.0" r="6.5" fill="#f59e0b" stroke="#0f172a" stroke-width="1.5"><title>Claude Sonnet 4.5: 100% @ $3.75/1K</title></circle><circle class="chart-point" cx="407.5" cy="205.0" r="6.5" fill="#f59e0b" stroke="#0f172a" stroke-width="1.5"><title>Claude Haiku 4.5: 100% @ $1.25/1K</title></circle><circle class="chart-point" cx="684.0" cy="205.0" r="6.5" fill="#f59e0b" stroke="#0f172a" stroke-width="1.5"><title>Claude Opus 4.1: 100% @ $18.75/1K</title></circle><circle class="chart-point" cx="203.7" cy="205.0" r="6.5" fill="#6366f1" stroke="#0f172a" stroke-width="1.5"><title>GPT OSS 120B (Groq): 100% @ $0.17/1K</title></circle><circle class="chart-point" cx="126.8" cy="205.0" r="6.5" fill="#6366f1" stroke="#0f172a" stroke-width="1.5"><title>GPT OSS 20B (Groq): 100% @ $0.08/1K</title></circle><circle class="chart-point" cx="159.3" cy="205.0" r="6.5" fill="#6366f1" stroke="#0f172a" stroke-width="1.5"><title>Llama 4 Scout 17B (Groq): 100% @ $0.11/1K</title></circle><circle class="chart-point" cx="234.6" cy="205.0" r="6.5" fill="#6366f1" stroke="#0f172a" stroke-width="1.5"><title>Qwen3 32B (Groq): 100% @ $0.23/1K</title></circle><circle class="chart-point" cx="293.6" cy="205.0" r="6.5" fill="#6366f1" stroke="#0f172a" stroke-width="1.5"><title>Llama 3.3 70B (Groq): 100% @ $0.41/1K</title></circle><circle class="chart-point chart-point--frontier" cx="56.0" cy="205.0" r="6.5" fill="#6366f1" stroke="#0f172a" stroke-width="1.5"><title>Llama 3.1 8B (Groq): 100% @ $0.04/1K</title></circle><text class="point-label" x="66.0" y="195.0" text-anchor="start">Cheapest + Highest quality + Best value: Llama 3.1 8B (Groq)</text>
     </svg></div>
             </section>
 <section class="card" id="task-summarization">
               <h2>Summarization</h2>
-              <table>
+              <div class="benchmark-card" data-table-id="summarization">
+      <div class="filter-bar" aria-label="Filters for summarization benchmark">
+        <div class="filter-group">
+          <span class="filter-label">Provider</span>
+          <div class="chip-group"><button type='button' class='chip is-active' data-provider='anthropic'>anthropic</button><button type='button' class='chip is-active' data-provider='groq'>groq</button><button type='button' class='chip is-active' data-provider='openai'>openai</button></div>
+        </div>
+        <label class="filter-field">Min cost
+          <input type="number" class="filter-min-cost" value="0.04" min="0" step="0.01"/>
+        </label>
+        <label class="filter-field">Max cost
+          <input type="number" class="filter-max-cost" value="18.75" min="0" step="0.01"/>
+        </label>
+        <label class="filter-field filter-field--wide">
+          <span>Quality ≥ <output class="quality-output">0</output></span>
+          <input type="range" class="filter-min-quality" value="0" min="0" max="100" step="1"/>
+        </label>
+      </div>
+      <div class="table-wrap"><table class="benchmark-table">
       <thead><tr>
-        <th>Model</th><th>Provider</th><th>Quality</th>
-        <th>Latency p50</th><th>Cost/1K</th><th>Tags</th>
+        <th><button type="button" data-sort="model" data-type="text">Model</button></th>
+        <th><button type="button" data-sort="provider" data-type="text">Provider</button></th>
+        <th><button type="button" data-sort="quality" data-type="number">Quality</button></th>
+        <th><button type="button" data-sort="latency" data-type="number">Latency p50</button></th>
+        <th><button type="button" data-sort="cost" data-type="number">Cost / 1K reqs</button></th>
+        <th><button type="button" data-sort="value" data-type="number" data-default-sort="desc">
+          Quality / $</button></th>
+        <th><button type="button" data-sort="tags" data-type="text">Tags</button></th>
       </tr></thead>
-      <tbody><tr><td>Qwen3 32B (Groq)</td><td>groq</td><td>97</td><td>1554ms</td><td>$0.23</td><td>value</td></tr><tr><td>GPT-5.5</td><td>openai</td><td>93</td><td>3446ms</td><td>$7.00</td><td>—</td></tr><tr><td>GPT-5.4</td><td>openai</td><td>93</td><td>2757ms</td><td>$3.50</td><td>—</td></tr><tr><td>Claude Sonnet 4.6</td><td>anthropic</td><td>93</td><td>3708ms</td><td>$3.75</td><td>—</td></tr><tr><td>GPT OSS 120B (Groq)</td><td>groq</td><td>93</td><td>1173ms</td><td>$0.17</td><td>value, cheapest</td></tr><tr><td>GPT-5.4 mini</td><td>openai</td><td>90</td><td>1522ms</td><td>$1.05</td><td>—</td></tr><tr><td>GPT-4.1</td><td>openai</td><td>90</td><td>1643ms</td><td>$2.20</td><td>—</td></tr><tr><td>GPT-4.1 mini</td><td>openai</td><td>90</td><td>3083ms</td><td>$0.44</td><td>value</td></tr><tr><td>o3-mini</td><td>openai</td><td>90</td><td>3706ms</td><td>$1.21</td><td>—</td></tr><tr><td>Claude Opus 4.7</td><td>anthropic</td><td>90</td><td>3979ms</td><td>$6.25</td><td>—</td></tr><tr><td>Claude Opus 4.5</td><td>anthropic</td><td>90</td><td>2767ms</td><td>$6.25</td><td>—</td></tr><tr><td>Claude Sonnet 4.5</td><td>anthropic</td><td>90</td><td>3785ms</td><td>$3.75</td><td>—</td></tr><tr><td>Claude Haiku 4.5</td><td>anthropic</td><td>90</td><td>2094ms</td><td>$1.25</td><td>—</td></tr><tr><td>Claude Opus 4.1</td><td>anthropic</td><td>90</td><td>4412ms</td><td>$18.75</td><td>—</td></tr><tr><td>GPT-4o</td><td>openai</td><td>87</td><td>1586ms</td><td>$2.75</td><td>—</td></tr><tr><td>GPT-4o mini</td><td>openai</td><td>87</td><td>3008ms</td><td>$0.17</td><td>value, cheapest</td></tr><tr><td>GPT OSS 20B (Groq)</td><td>groq</td><td>87</td><td>1157ms</td><td>$0.08</td><td>value, cheapest</td></tr><tr><td>Llama 4 Scout 17B (Groq)</td><td>groq</td><td>87</td><td>1411ms</td><td>$0.11</td><td>value, cheapest</td></tr><tr><td>Llama 3.1 8B (Groq)</td><td>groq</td><td>87</td><td>1159ms</td><td>$0.04</td><td>value, cheapest</td></tr><tr><td>Llama 3.3 70B (Groq)</td><td>groq</td><td>70</td><td>1050ms</td><td>$0.41</td><td>—</td></tr></tbody>
-    </table>
-              <div class="chart-wrap"><svg viewBox="0 0 640 360" class="pareto-chart" role="img"
-      aria-label="Cost vs quality chart">
-      <line x1="48" y1="312" x2="592" y2="312"
-            stroke="#334155"/>
-      <line x1="48" y1="48" x2="48" y2="312" stroke="#334155"/>
-      <text x="320" y="352" text-anchor="middle" fill="#94a3b8" font-size="12">
-        Cost per 1K requests ($)</text>
-      <text x="14" y="180" text-anchor="middle" fill="#94a3b8" font-size="12"
-            transform="rotate(-90 14 180)">Quality</text>
-      <polyline points="93.3,152.4 96.5,98.0 97.9,70.0" fill="none" stroke="#22c55e" stroke-width="2"
+      <tbody><tr data-default-index='0' data-provider='groq' data-cost='0.040000' data-quality='86.700000'><td data-value='llama 3.1 8b (groq)'>Llama 3.1 8B (Groq)</td><td data-value='groq'>groq</td><td data-value='86.700000'>87</td><td data-value='1159.400000'>1159ms</td><td data-value='0.040000'>$0.04</td><td data-value='2167.500000'>2167.5</td><td data-value='value, cheapest'>value, cheapest</td></tr><tr data-default-index='1' data-provider='groq' data-cost='0.080000' data-quality='86.700000'><td data-value='gpt oss 20b (groq)'>GPT OSS 20B (Groq)</td><td data-value='groq'>groq</td><td data-value='86.700000'>87</td><td data-value='1156.600000'>1157ms</td><td data-value='0.080000'>$0.08</td><td data-value='1083.750000'>1083.8</td><td data-value='value, cheapest'>value, cheapest</td></tr><tr data-default-index='2' data-provider='groq' data-cost='0.110000' data-quality='86.700000'><td data-value='llama 4 scout 17b (groq)'>Llama 4 Scout 17B (Groq)</td><td data-value='groq'>groq</td><td data-value='86.700000'>87</td><td data-value='1411.200000'>1411ms</td><td data-value='0.110000'>$0.11</td><td data-value='788.181818'>788.2</td><td data-value='value, cheapest'>value, cheapest</td></tr><tr data-default-index='3' data-provider='groq' data-cost='0.170000' data-quality='93.300000'><td data-value='gpt oss 120b (groq)'>GPT OSS 120B (Groq)</td><td data-value='groq'>groq</td><td data-value='93.300000'>93</td><td data-value='1173.000000'>1173ms</td><td data-value='0.170000'>$0.17</td><td data-value='548.823529'>548.8</td><td data-value='value, cheapest'>value, cheapest</td></tr><tr data-default-index='4' data-provider='openai' data-cost='0.170000' data-quality='86.700000'><td data-value='gpt-4o mini'>GPT-4o mini</td><td data-value='openai'>openai</td><td data-value='86.700000'>87</td><td data-value='3007.500000'>3008ms</td><td data-value='0.170000'>$0.17</td><td data-value='510.000000'>510.0</td><td data-value='value, cheapest'>value, cheapest</td></tr><tr data-default-index='5' data-provider='groq' data-cost='0.230000' data-quality='96.700000'><td data-value='qwen3 32b (groq)'>Qwen3 32B (Groq)</td><td data-value='groq'>groq</td><td data-value='96.700000'>97</td><td data-value='1554.300000'>1554ms</td><td data-value='0.230000'>$0.23</td><td data-value='420.434783'>420.4</td><td data-value='value'>value</td></tr><tr data-default-index='6' data-provider='openai' data-cost='0.440000' data-quality='90.000000'><td data-value='gpt-4.1 mini'>GPT-4.1 mini</td><td data-value='openai'>openai</td><td data-value='90.000000'>90</td><td data-value='3083.400000'>3083ms</td><td data-value='0.440000'>$0.44</td><td data-value='204.545455'>204.5</td><td data-value='value'>value</td></tr><tr data-default-index='7' data-provider='groq' data-cost='0.410000' data-quality='70.000000'><td data-value='llama 3.3 70b (groq)'>Llama 3.3 70B (Groq)</td><td data-value='groq'>groq</td><td data-value='70.000000'>70</td><td data-value='1050.100000'>1050ms</td><td data-value='0.410000'>$0.41</td><td data-value='170.731707'>170.7</td><td data-value=''></td></tr><tr data-default-index='8' data-provider='openai' data-cost='1.050000' data-quality='90.000000'><td data-value='gpt-5.4 mini'>GPT-5.4 mini</td><td data-value='openai'>openai</td><td data-value='90.000000'>90</td><td data-value='1521.500000'>1522ms</td><td data-value='1.050000'>$1.05</td><td data-value='85.714286'>85.7</td><td data-value=''></td></tr><tr data-default-index='9' data-provider='openai' data-cost='1.210000' data-quality='90.000000'><td data-value='o3-mini'>o3-mini</td><td data-value='openai'>openai</td><td data-value='90.000000'>90</td><td data-value='3706.100000'>3706ms</td><td data-value='1.210000'>$1.21</td><td data-value='74.380165'>74.4</td><td data-value=''></td></tr><tr data-default-index='10' data-provider='anthropic' data-cost='1.250000' data-quality='90.000000'><td data-value='claude haiku 4.5'>Claude Haiku 4.5</td><td data-value='anthropic'>anthropic</td><td data-value='90.000000'>90</td><td data-value='2094.200000'>2094ms</td><td data-value='1.250000'>$1.25</td><td data-value='72.000000'>72.0</td><td data-value=''></td></tr><tr data-default-index='11' data-provider='openai' data-cost='2.200000' data-quality='90.000000'><td data-value='gpt-4.1'>GPT-4.1</td><td data-value='openai'>openai</td><td data-value='90.000000'>90</td><td data-value='1642.700000'>1643ms</td><td data-value='2.200000'>$2.20</td><td data-value='40.909091'>40.9</td><td data-value=''></td></tr><tr data-default-index='12' data-provider='openai' data-cost='2.750000' data-quality='86.700000'><td data-value='gpt-4o'>GPT-4o</td><td data-value='openai'>openai</td><td data-value='86.700000'>87</td><td data-value='1586.000000'>1586ms</td><td data-value='2.750000'>$2.75</td><td data-value='31.527273'>31.5</td><td data-value=''></td></tr><tr data-default-index='13' data-provider='openai' data-cost='3.500000' data-quality='93.300000'><td data-value='gpt-5.4'>GPT-5.4</td><td data-value='openai'>openai</td><td data-value='93.300000'>93</td><td data-value='2756.600000'>2757ms</td><td data-value='3.500000'>$3.50</td><td data-value='26.657143'>26.7</td><td data-value=''></td></tr><tr data-default-index='14' data-provider='anthropic' data-cost='3.750000' data-quality='93.300000'><td data-value='claude sonnet 4.6'>Claude Sonnet 4.6</td><td data-value='anthropic'>anthropic</td><td data-value='93.300000'>93</td><td data-value='3707.700000'>3708ms</td><td data-value='3.750000'>$3.75</td><td data-value='24.880000'>24.9</td><td data-value=''></td></tr><tr data-default-index='15' data-provider='anthropic' data-cost='3.750000' data-quality='90.000000'><td data-value='claude sonnet 4.5'>Claude Sonnet 4.5</td><td data-value='anthropic'>anthropic</td><td data-value='90.000000'>90</td><td data-value='3785.100000'>3785ms</td><td data-value='3.750000'>$3.75</td><td data-value='24.000000'>24.0</td><td data-value=''></td></tr><tr data-default-index='16' data-provider='anthropic' data-cost='6.250000' data-quality='90.000000'><td data-value='claude opus 4.7'>Claude Opus 4.7</td><td data-value='anthropic'>anthropic</td><td data-value='90.000000'>90</td><td data-value='3979.400000'>3979ms</td><td data-value='6.250000'>$6.25</td><td data-value='14.400000'>14.4</td><td data-value=''></td></tr><tr data-default-index='17' data-provider='anthropic' data-cost='6.250000' data-quality='90.000000'><td data-value='claude opus 4.5'>Claude Opus 4.5</td><td data-value='anthropic'>anthropic</td><td data-value='90.000000'>90</td><td data-value='2766.700000'>2767ms</td><td data-value='6.250000'>$6.25</td><td data-value='14.400000'>14.4</td><td data-value=''></td></tr><tr data-default-index='18' data-provider='openai' data-cost='7.000000' data-quality='93.300000'><td data-value='gpt-5.5'>GPT-5.5</td><td data-value='openai'>openai</td><td data-value='93.300000'>93</td><td data-value='3446.000000'>3446ms</td><td data-value='7.000000'>$7.00</td><td data-value='13.328571'>13.3</td><td data-value=''></td></tr><tr data-default-index='19' data-provider='anthropic' data-cost='18.750000' data-quality='90.000000'><td data-value='claude opus 4.1'>Claude Opus 4.1</td><td data-value='anthropic'>anthropic</td><td data-value='90.000000'>90</td><td data-value='4412.500000'>4412ms</td><td data-value='18.750000'>$18.75</td><td data-value='4.800000'>4.8</td><td data-value=''></td></tr></tbody>
+    </table></div></div>
+              <div class="chart-wrap"><svg viewBox="0 0 720 420" class="pareto-chart" role="img"
+      aria-label="Cost vs quality chart using a logarithmic cost scale">
+      <line x1="56" y1="362" x2="684"
+            y2="362" stroke="#334155"/>
+      <line x1="56" y1="48" x2="56"
+            y2="362" stroke="#334155"/>
+      <g><line x1="56.0" y1="362.0" x2="56.0" y2="367.0" stroke="#475569"/><text x="56.0" y="382.0" text-anchor="middle" fill="#94a3b8" font-size="11">$0.04</text></g><g><line x1="370.0" y1="362.0" x2="370.0" y2="367.0" stroke="#475569"/><text x="370.0" y="382.0" text-anchor="middle" fill="#94a3b8" font-size="11">$0.87</text></g><g><line x1="684.0" y1="362.0" x2="684.0" y2="367.0" stroke="#475569"/><text x="684.0" y="382.0" text-anchor="middle" fill="#94a3b8" font-size="11">$19</text></g>
+      <text x="360" y="412" text-anchor="middle" fill="#94a3b8" font-size="12">
+        Cost / 1K reqs ($, log scale)</text>
+      <text x="16" y="210" text-anchor="middle" fill="#94a3b8" font-size="12"
+            transform="rotate(-90 16 210)">Quality</text>
+      <polyline points="56.0,172.2 203.7,107.5 234.6,74.2" fill="none" stroke="#e2e8f0" stroke-width="2"
                 stroke-dasharray="5,4"/>
-      <circle cx="262.0" cy="98.0" r="6" fill="#6366f1" stroke="#0f172a" stroke-width="1"><title>GPT-5.5: 93% @ $7.00/1K</title></circle><circle cx="177.2" cy="98.0" r="6" fill="#6366f1" stroke="#0f172a" stroke-width="1"><title>GPT-5.4: 93% @ $3.50/1K</title></circle><circle cx="117.8" cy="125.2" r="6" fill="#6366f1" stroke="#0f172a" stroke-width="1"><title>GPT-5.4 mini: 90% @ $1.05/1K</title></circle><circle cx="159.0" cy="152.4" r="6" fill="#6366f1" stroke="#0f172a" stroke-width="1"><title>GPT-4o: 87% @ $2.75/1K</title></circle><circle cx="96.5" cy="152.4" r="6" fill="#6366f1" stroke="#0f172a" stroke-width="1"><title>GPT-4o mini: 87% @ $0.17/1K</title></circle><circle cx="145.7" cy="125.2" r="6" fill="#6366f1" stroke="#0f172a" stroke-width="1"><title>GPT-4.1: 90% @ $2.20/1K</title></circle><circle cx="103.0" cy="125.2" r="6" fill="#6366f1" stroke="#0f172a" stroke-width="1"><title>GPT-4.1 mini: 90% @ $0.44/1K</title></circle><circle cx="121.7" cy="125.2" r="6" fill="#6366f1" stroke="#0f172a" stroke-width="1"><title>o3-mini: 90% @ $1.21/1K</title></circle><circle cx="243.8" cy="125.2" r="6" fill="#6366f1" stroke="#0f172a" stroke-width="1"><title>Claude Opus 4.7: 90% @ $6.25/1K</title></circle><circle cx="183.2" cy="98.0" r="6" fill="#6366f1" stroke="#0f172a" stroke-width="1"><title>Claude Sonnet 4.6: 93% @ $3.75/1K</title></circle><circle cx="243.8" cy="125.2" r="6" fill="#6366f1" stroke="#0f172a" stroke-width="1"><title>Claude Opus 4.5: 90% @ $6.25/1K</title></circle><circle cx="183.2" cy="125.2" r="6" fill="#6366f1" stroke="#0f172a" stroke-width="1"><title>Claude Sonnet 4.5: 90% @ $3.75/1K</title></circle><circle cx="122.7" cy="125.2" r="6" fill="#6366f1" stroke="#0f172a" stroke-width="1"><title>Claude Haiku 4.5: 90% @ $1.25/1K</title></circle><circle cx="546.7" cy="125.2" r="6" fill="#6366f1" stroke="#0f172a" stroke-width="1"><title>Claude Opus 4.1: 90% @ $18.75/1K</title></circle><circle cx="96.5" cy="98.0" r="6" fill="#22c55e" stroke="#0f172a" stroke-width="1"><title>GPT OSS 120B (Groq): 93% @ $0.17/1K</title></circle><circle cx="94.3" cy="152.4" r="6" fill="#6366f1" stroke="#0f172a" stroke-width="1"><title>GPT OSS 20B (Groq): 87% @ $0.08/1K</title></circle><circle cx="95.0" cy="152.4" r="6" fill="#6366f1" stroke="#0f172a" stroke-width="1"><title>Llama 4 Scout 17B (Groq): 87% @ $0.11/1K</title></circle><circle cx="97.9" cy="70.0" r="6" fill="#22c55e" stroke="#0f172a" stroke-width="1"><title>Qwen3 32B (Groq): 97% @ $0.23/1K</title></circle><circle cx="102.3" cy="290.0" r="6" fill="#6366f1" stroke="#0f172a" stroke-width="1"><title>Llama 3.3 70B (Groq): 70% @ $0.41/1K</title></circle><circle cx="93.3" cy="152.4" r="6" fill="#22c55e" stroke="#0f172a" stroke-width="1"><title>Llama 3.1 8B (Groq): 87% @ $0.04/1K</title></circle>
+      <g class="chart-legend" transform="translate(570, 56)"><g transform="translate(0,0)"><circle cx="0" cy="0" r="5" fill="#f59e0b"/><text x="12" y="4" class="legend-label">anthropic</text></g><g transform="translate(0,22)"><circle cx="0" cy="0" r="5" fill="#6366f1"/><text x="12" y="4" class="legend-label">groq</text></g><g transform="translate(0,44)"><circle cx="0" cy="0" r="5" fill="#10b981"/><text x="12" y="4" class="legend-label">openai</text></g></g>
+      <circle class="chart-point" cx="583.4" cy="107.5" r="6.5" fill="#10b981" stroke="#0f172a" stroke-width="1.5"><title>GPT-5.5: 93% @ $7.00/1K</title></circle><circle class="chart-point" cx="512.6" cy="107.5" r="6.5" fill="#10b981" stroke="#0f172a" stroke-width="1.5"><title>GPT-5.4: 93% @ $3.50/1K</title></circle><circle class="chart-point" cx="389.7" cy="139.8" r="6.5" fill="#10b981" stroke="#0f172a" stroke-width="1.5"><title>GPT-5.4 mini: 90% @ $1.05/1K</title></circle><circle class="chart-point" cx="488.0" cy="172.2" r="6.5" fill="#10b981" stroke="#0f172a" stroke-width="1.5"><title>GPT-4o: 87% @ $2.75/1K</title></circle><circle class="chart-point" cx="203.7" cy="172.2" r="6.5" fill="#10b981" stroke="#0f172a" stroke-width="1.5"><title>GPT-4o mini: 87% @ $0.17/1K</title></circle><circle class="chart-point" cx="465.2" cy="139.8" r="6.5" fill="#10b981" stroke="#0f172a" stroke-width="1.5"><title>GPT-4.1: 90% @ $2.20/1K</title></circle><circle class="chart-point" cx="300.9" cy="139.8" r="6.5" fill="#10b981" stroke="#0f172a" stroke-width="1.5"><title>GPT-4.1 mini: 90% @ $0.44/1K</title></circle><circle class="chart-point" cx="404.2" cy="139.8" r="6.5" fill="#10b981" stroke="#0f172a" stroke-width="1.5"><title>o3-mini: 90% @ $1.21/1K</title></circle><circle class="chart-point" cx="571.8" cy="139.8" r="6.5" fill="#f59e0b" stroke="#0f172a" stroke-width="1.5"><title>Claude Opus 4.7: 90% @ $6.25/1K</title></circle><circle class="chart-point" cx="519.7" cy="107.5" r="6.5" fill="#f59e0b" stroke="#0f172a" stroke-width="1.5"><title>Claude Sonnet 4.6: 93% @ $3.75/1K</title></circle><circle class="chart-point" cx="571.8" cy="139.8" r="6.5" fill="#f59e0b" stroke="#0f172a" stroke-width="1.5"><title>Claude Opus 4.5: 90% @ $6.25/1K</title></circle><circle class="chart-point" cx="519.7" cy="139.8" r="6.5" fill="#f59e0b" stroke="#0f172a" stroke-width="1.5"><title>Claude Sonnet 4.5: 90% @ $3.75/1K</title></circle><circle class="chart-point" cx="407.5" cy="139.8" r="6.5" fill="#f59e0b" stroke="#0f172a" stroke-width="1.5"><title>Claude Haiku 4.5: 90% @ $1.25/1K</title></circle><circle class="chart-point" cx="684.0" cy="139.8" r="6.5" fill="#f59e0b" stroke="#0f172a" stroke-width="1.5"><title>Claude Opus 4.1: 90% @ $18.75/1K</title></circle><circle class="chart-point chart-point--frontier" cx="203.7" cy="107.5" r="6.5" fill="#6366f1" stroke="#0f172a" stroke-width="1.5"><title>GPT OSS 120B (Groq): 93% @ $0.17/1K</title></circle><circle class="chart-point" cx="126.8" cy="172.2" r="6.5" fill="#6366f1" stroke="#0f172a" stroke-width="1.5"><title>GPT OSS 20B (Groq): 87% @ $0.08/1K</title></circle><circle class="chart-point" cx="159.3" cy="172.2" r="6.5" fill="#6366f1" stroke="#0f172a" stroke-width="1.5"><title>Llama 4 Scout 17B (Groq): 87% @ $0.11/1K</title></circle><circle class="chart-point chart-point--frontier" cx="234.6" cy="74.2" r="6.5" fill="#6366f1" stroke="#0f172a" stroke-width="1.5"><title>Qwen3 32B (Groq): 97% @ $0.23/1K</title></circle><text class="point-label" x="244.6" y="64.2" text-anchor="start">Highest quality: Qwen3 32B (Groq)</text><circle class="chart-point" cx="293.6" cy="335.8" r="6.5" fill="#6366f1" stroke="#0f172a" stroke-width="1.5"><title>Llama 3.3 70B (Groq): 70% @ $0.41/1K</title></circle><circle class="chart-point chart-point--frontier" cx="56.0" cy="172.2" r="6.5" fill="#6366f1" stroke="#0f172a" stroke-width="1.5"><title>Llama 3.1 8B (Groq): 87% @ $0.04/1K</title></circle><text class="point-label" x="66.0" y="162.2" text-anchor="start">Cheapest + Best value: Llama 3.1 8B (Groq)</text>
     </svg></div>
             </section>
     </section>
@@ -111,32 +274,34 @@
       <p class="muted small">Reference data — <strong>not benchmarked by llm-bench</strong>.
       Numbers below were copied verbatim from each provider's pricing page on
       <strong>2026-05-18</strong>. Click <em>source</em> on any row to
-      verify the latest rate. Prices in USD per 1M tokens.</p>
-      <table>
+      verify the latest rate. Prices in USD per 1M tokens. Cached input discounts are
+      shown where the provider publishes a broad discount; batch average assumes 50% off.</p>
+      <div class="table-wrap"><table>
         <thead><tr>
-          <th>Provider</th><th>Model</th><th>Input/1M</th><th>Output/1M</th><th>Avg/1M</th><th>Source</th>
+          <th>Provider</th><th>Model</th><th>Input/1M</th><th>Output/1M</th>
+          <th>Cached Input/1M</th><th>Avg/1M</th><th>Batch Avg/1M</th><th>Source</th>
         </tr></thead>
-        <tbody><tr><td>groq</td><td>Llama 3.1 8B (Groq)</td><td>$0.050</td><td>$0.080</td><td class='highlight'>$0.058</td><td class='muted'><a href='https://groq.com/pricing/' target='_blank' rel='noopener'>source</a></td></tr>
-<tr><td>groq</td><td>GPT OSS 20B (Groq)</td><td>$0.075</td><td>$0.300</td><td class='highlight'>$0.131</td><td class='muted'><a href='https://groq.com/pricing/' target='_blank' rel='noopener'>source</a></td></tr>
-<tr><td>groq</td><td>Llama 4 Scout 17B (Groq)</td><td>$0.110</td><td>$0.340</td><td class='highlight'>$0.168</td><td class='muted'><a href='https://groq.com/pricing/' target='_blank' rel='noopener'>source</a></td></tr>
-<tr><td>openai</td><td>GPT-4o mini</td><td>$0.150</td><td>$0.600</td><td class='highlight'>$0.262</td><td class='muted'><a href='https://openai.com/api/pricing/' target='_blank' rel='noopener'>source</a></td></tr>
-<tr><td>groq</td><td>GPT OSS 120B (Groq)</td><td>$0.150</td><td>$0.600</td><td class='highlight'>$0.262</td><td class='muted'><a href='https://groq.com/pricing/' target='_blank' rel='noopener'>source</a></td></tr>
-<tr><td>groq</td><td>Qwen3 32B (Groq)</td><td>$0.290</td><td>$0.590</td><td class='highlight'>$0.365</td><td class='muted'><a href='https://groq.com/pricing/' target='_blank' rel='noopener'>source</a></td></tr>
-<tr><td>groq</td><td>Llama 3.3 70B (Groq)</td><td>$0.590</td><td>$0.790</td><td class='highlight'>$0.640</td><td class='muted'><a href='https://groq.com/pricing/' target='_blank' rel='noopener'>source</a></td></tr>
-<tr><td>openai</td><td>GPT-4.1 mini</td><td>$0.400</td><td>$1.600</td><td class='highlight'>$0.700</td><td class='muted'><a href='https://openai.com/api/pricing/' target='_blank' rel='noopener'>source</a></td></tr>
-<tr><td>openai</td><td>GPT-5.4 mini</td><td>$0.750</td><td>$4.500</td><td class='highlight'>$1.688</td><td class='muted'><a href='https://openai.com/api/pricing/' target='_blank' rel='noopener'>source</a></td></tr>
-<tr><td>openai</td><td>o3-mini</td><td>$1.100</td><td>$4.400</td><td class='highlight'>$1.925</td><td class='muted'><a href='https://openai.com/api/pricing/' target='_blank' rel='noopener'>source</a></td></tr>
-<tr><td>anthropic</td><td>Claude Haiku 4.5</td><td>$1.000</td><td>$5.000</td><td class='highlight'>$2.000</td><td class='muted'><a href='https://www.anthropic.com/pricing' target='_blank' rel='noopener'>source</a></td></tr>
-<tr><td>openai</td><td>GPT-4.1</td><td>$2.000</td><td>$8.000</td><td class='highlight'>$3.500</td><td class='muted'><a href='https://openai.com/api/pricing/' target='_blank' rel='noopener'>source</a></td></tr>
-<tr><td>openai</td><td>GPT-4o</td><td>$2.500</td><td>$10.000</td><td class='highlight'>$4.375</td><td class='muted'><a href='https://openai.com/api/pricing/' target='_blank' rel='noopener'>source</a></td></tr>
-<tr><td>openai</td><td>GPT-5.4</td><td>$2.500</td><td>$15.000</td><td class='highlight'>$5.625</td><td class='muted'><a href='https://openai.com/api/pricing/' target='_blank' rel='noopener'>source</a></td></tr>
-<tr><td>anthropic</td><td>Claude Sonnet 4.6</td><td>$3.000</td><td>$15.000</td><td class='highlight'>$6.000</td><td class='muted'><a href='https://www.anthropic.com/pricing' target='_blank' rel='noopener'>source</a></td></tr>
-<tr><td>anthropic</td><td>Claude Sonnet 4.5</td><td>$3.000</td><td>$15.000</td><td class='highlight'>$6.000</td><td class='muted'><a href='https://www.anthropic.com/pricing' target='_blank' rel='noopener'>source</a></td></tr>
-<tr><td>anthropic</td><td>Claude Opus 4.7</td><td>$5.000</td><td>$25.000</td><td class='highlight'>$10.000</td><td class='muted'><a href='https://www.anthropic.com/pricing' target='_blank' rel='noopener'>source</a></td></tr>
-<tr><td>anthropic</td><td>Claude Opus 4.5</td><td>$5.000</td><td>$25.000</td><td class='highlight'>$10.000</td><td class='muted'><a href='https://www.anthropic.com/pricing' target='_blank' rel='noopener'>source</a></td></tr>
-<tr><td>openai</td><td>GPT-5.5</td><td>$5.000</td><td>$30.000</td><td class='highlight'>$11.250</td><td class='muted'><a href='https://openai.com/api/pricing/' target='_blank' rel='noopener'>source</a></td></tr>
-<tr><td>anthropic</td><td>Claude Opus 4.1</td><td>$15.000</td><td>$75.000</td><td class='highlight'>$30.000</td><td class='muted'><a href='https://www.anthropic.com/pricing' target='_blank' rel='noopener'>source</a></td></tr></tbody>
-      </table>
+        <tbody><tr><td>groq</td><td>Llama 3.1 8B (Groq)</td><td>$0.050</td><td>$0.080</td><td></td><td class='highlight'>$0.058</td><td>$0.029</td><td class='muted'><a href='https://groq.com/pricing/' target='_blank' rel='noopener'>source</a></td></tr>
+<tr><td>groq</td><td>GPT OSS 20B (Groq)</td><td>$0.075</td><td>$0.300</td><td></td><td class='highlight'>$0.131</td><td>$0.066</td><td class='muted'><a href='https://groq.com/pricing/' target='_blank' rel='noopener'>source</a></td></tr>
+<tr><td>groq</td><td>Llama 4 Scout 17B (Groq)</td><td>$0.110</td><td>$0.340</td><td></td><td class='highlight'>$0.168</td><td>$0.084</td><td class='muted'><a href='https://groq.com/pricing/' target='_blank' rel='noopener'>source</a></td></tr>
+<tr><td>openai</td><td>GPT-4o mini</td><td>$0.150</td><td>$0.600</td><td>$0.075</td><td class='highlight'>$0.262</td><td>$0.131</td><td class='muted'><a href='https://openai.com/api/pricing/' target='_blank' rel='noopener'>source</a></td></tr>
+<tr><td>groq</td><td>GPT OSS 120B (Groq)</td><td>$0.150</td><td>$0.600</td><td></td><td class='highlight'>$0.262</td><td>$0.131</td><td class='muted'><a href='https://groq.com/pricing/' target='_blank' rel='noopener'>source</a></td></tr>
+<tr><td>groq</td><td>Qwen3 32B (Groq)</td><td>$0.290</td><td>$0.590</td><td></td><td class='highlight'>$0.365</td><td>$0.182</td><td class='muted'><a href='https://groq.com/pricing/' target='_blank' rel='noopener'>source</a></td></tr>
+<tr><td>groq</td><td>Llama 3.3 70B (Groq)</td><td>$0.590</td><td>$0.790</td><td></td><td class='highlight'>$0.640</td><td>$0.320</td><td class='muted'><a href='https://groq.com/pricing/' target='_blank' rel='noopener'>source</a></td></tr>
+<tr><td>openai</td><td>GPT-4.1 mini</td><td>$0.400</td><td>$1.600</td><td>$0.200</td><td class='highlight'>$0.700</td><td>$0.350</td><td class='muted'><a href='https://openai.com/api/pricing/' target='_blank' rel='noopener'>source</a></td></tr>
+<tr><td>openai</td><td>GPT-5.4 mini</td><td>$0.750</td><td>$4.500</td><td>$0.375</td><td class='highlight'>$1.688</td><td>$0.844</td><td class='muted'><a href='https://openai.com/api/pricing/' target='_blank' rel='noopener'>source</a></td></tr>
+<tr><td>openai</td><td>o3-mini</td><td>$1.100</td><td>$4.400</td><td>$0.550</td><td class='highlight'>$1.925</td><td>$0.963</td><td class='muted'><a href='https://openai.com/api/pricing/' target='_blank' rel='noopener'>source</a></td></tr>
+<tr><td>anthropic</td><td>Claude Haiku 4.5</td><td>$1.000</td><td>$5.000</td><td>$0.100</td><td class='highlight'>$2.000</td><td>$1.000</td><td class='muted'><a href='https://www.anthropic.com/pricing' target='_blank' rel='noopener'>source</a></td></tr>
+<tr><td>openai</td><td>GPT-4.1</td><td>$2.000</td><td>$8.000</td><td>$1.000</td><td class='highlight'>$3.500</td><td>$1.750</td><td class='muted'><a href='https://openai.com/api/pricing/' target='_blank' rel='noopener'>source</a></td></tr>
+<tr><td>openai</td><td>GPT-4o</td><td>$2.500</td><td>$10.000</td><td>$1.250</td><td class='highlight'>$4.375</td><td>$2.188</td><td class='muted'><a href='https://openai.com/api/pricing/' target='_blank' rel='noopener'>source</a></td></tr>
+<tr><td>openai</td><td>GPT-5.4</td><td>$2.500</td><td>$15.000</td><td>$1.250</td><td class='highlight'>$5.625</td><td>$2.812</td><td class='muted'><a href='https://openai.com/api/pricing/' target='_blank' rel='noopener'>source</a></td></tr>
+<tr><td>anthropic</td><td>Claude Sonnet 4.6</td><td>$3.000</td><td>$15.000</td><td>$0.300</td><td class='highlight'>$6.000</td><td>$3.000</td><td class='muted'><a href='https://www.anthropic.com/pricing' target='_blank' rel='noopener'>source</a></td></tr>
+<tr><td>anthropic</td><td>Claude Sonnet 4.5</td><td>$3.000</td><td>$15.000</td><td>$0.300</td><td class='highlight'>$6.000</td><td>$3.000</td><td class='muted'><a href='https://www.anthropic.com/pricing' target='_blank' rel='noopener'>source</a></td></tr>
+<tr><td>anthropic</td><td>Claude Opus 4.7</td><td>$5.000</td><td>$25.000</td><td>$0.500</td><td class='highlight'>$10.000</td><td>$5.000</td><td class='muted'><a href='https://www.anthropic.com/pricing' target='_blank' rel='noopener'>source</a></td></tr>
+<tr><td>anthropic</td><td>Claude Opus 4.5</td><td>$5.000</td><td>$25.000</td><td>$0.500</td><td class='highlight'>$10.000</td><td>$5.000</td><td class='muted'><a href='https://www.anthropic.com/pricing' target='_blank' rel='noopener'>source</a></td></tr>
+<tr><td>openai</td><td>GPT-5.5</td><td>$5.000</td><td>$30.000</td><td>$2.500</td><td class='highlight'>$11.250</td><td>$5.625</td><td class='muted'><a href='https://openai.com/api/pricing/' target='_blank' rel='noopener'>source</a></td></tr>
+<tr><td>anthropic</td><td>Claude Opus 4.1</td><td>$15.000</td><td>$75.000</td><td>$1.500</td><td class='highlight'>$30.000</td><td>$15.000</td><td class='muted'><a href='https://www.anthropic.com/pricing' target='_blank' rel='noopener'>source</a></td></tr></tbody>
+      </table></div>
     </section>
 
     <footer>
@@ -145,5 +310,149 @@
       <p>Generated by <a href="https://github.com/webswift-engineering/-llm-bench">llm-bench</a></p>
     </footer>
   </div>
+
+  <script>
+    (() => {
+      const sortIndexes = {
+        model: 0,
+        provider: 1,
+        quality: 2,
+        latency: 3,
+        cost: 4,
+        value: 5,
+        tags: 6,
+      };
+
+      const numberValue = (value) => Number.parseFloat(value) || 0;
+
+      function cellValue(row, key) {
+        const cell = row.cells[sortIndexes[key]];
+        return cell ? cell.dataset.value || cell.textContent.trim() : "";
+      }
+
+      function setSortLabels(card, sortKey, direction) {
+        card.querySelectorAll("th button[data-sort]").forEach((button) => {
+          button.dataset.label ||= button.textContent.trim();
+          button.classList.toggle("is-sorted", button.dataset.sort === sortKey);
+          const arrow = direction === "asc" ? " ▲" : " ▼";
+          button.textContent = button.dataset.label + (button.dataset.sort === sortKey ? arrow : "");
+        });
+      }
+
+      function initBenchmark(card) {
+        const tbody = card.querySelector("tbody");
+        const rows = Array.from(tbody.rows);
+        const chips = Array.from(card.querySelectorAll(".chip"));
+        const minCost = card.querySelector(".filter-min-cost");
+        const maxCost = card.querySelector(".filter-max-cost");
+        const minQuality = card.querySelector(".filter-min-quality");
+        const qualityOutput = card.querySelector(".quality-output");
+        let sortKey = "value";
+        let direction = "desc";
+
+        function render() {
+          const sorted = [...rows].sort((a, b) => {
+            if (!sortKey) {
+              return numberValue(a.dataset.defaultIndex) - numberValue(b.dataset.defaultIndex);
+            }
+            const type = card.querySelector(`[data-sort="${sortKey}"]`).dataset.type;
+            const aValue = cellValue(a, sortKey);
+            const bValue = cellValue(b, sortKey);
+            const result = type === "number"
+              ? numberValue(aValue) - numberValue(bValue)
+              : aValue.localeCompare(bValue);
+            return direction === "asc" ? result : -result;
+          });
+          sorted.forEach((row) => tbody.appendChild(row));
+          const activeProviders = new Set(
+            chips.filter((chip) => chip.classList.contains("is-active")).map((chip) => chip.dataset.provider)
+          );
+          const minCostValue = numberValue(minCost.value);
+          const maxCostValue = numberValue(maxCost.value) || Number.POSITIVE_INFINITY;
+          const minQualityValue = numberValue(minQuality.value);
+          qualityOutput.value = minQuality.value;
+          rows.forEach((row) => {
+            const visible = activeProviders.has(row.dataset.provider)
+              && numberValue(row.dataset.cost) >= minCostValue
+              && numberValue(row.dataset.cost) <= maxCostValue
+              && numberValue(row.dataset.quality) >= minQualityValue;
+            row.hidden = !visible;
+          });
+          setSortLabels(card, sortKey, direction);
+        }
+
+        card.querySelectorAll("th button[data-sort]").forEach((button) => {
+          button.addEventListener("click", () => {
+            const nextKey = button.dataset.sort;
+            if (sortKey !== nextKey) {
+              sortKey = nextKey;
+              direction = "asc";
+            } else if (direction === "asc") {
+              direction = "desc";
+            } else {
+              sortKey = null;
+              direction = "asc";
+            }
+            render();
+          });
+        });
+        chips.forEach((chip) => chip.addEventListener("click", () => {
+          chip.classList.toggle("is-active");
+          render();
+        }));
+        [minCost, maxCost, minQuality].forEach((input) => input.addEventListener("input", render));
+        render();
+      }
+
+      function initCalculator() {
+        const calculator = document.querySelector(".calculator");
+        if (!calculator) return;
+        const tasks = calculator.querySelector("#tasks-per-day");
+        const inputTokens = calculator.querySelector("#input-tokens");
+        const outputTokens = calculator.querySelector("#output-tokens");
+        const tbody = calculator.querySelector("tbody");
+        const rows = Array.from(tbody.rows);
+        function render() {
+          const taskCount = numberValue(tasks.value);
+          const inputCount = numberValue(inputTokens.value);
+          const outputCount = numberValue(outputTokens.value);
+          rows.forEach((row) => {
+            const monthly = taskCount * 30 * (
+              inputCount * numberValue(row.dataset.inputPrice) / 1000000
+              + outputCount * numberValue(row.dataset.outputPrice) / 1000000
+            );
+            row.dataset.monthlyCost = monthly.toFixed(6);
+            row.querySelector(".calculator-cost").textContent = `$${monthly.toFixed(2)}`;
+          });
+          rows
+            .sort((a, b) => numberValue(a.dataset.monthlyCost) - numberValue(b.dataset.monthlyCost))
+            .forEach((row) => tbody.appendChild(row));
+        }
+        [tasks, inputTokens, outputTokens].forEach((input) => input.addEventListener("input", render));
+        render();
+      }
+
+      function initScrollSpy() {
+        const links = Array.from(document.querySelectorAll(".top-nav a[href^='#']"));
+        const sections = links
+          .map((link) => document.querySelector(link.getAttribute("href")))
+          .filter(Boolean);
+        const observer = new IntersectionObserver((entries) => {
+          entries.forEach((entry) => {
+            if (!entry.isIntersecting) return;
+            links.forEach((link) => {
+              link.classList.toggle("is-active", link.getAttribute("href") === `#${entry.target.id}`);
+            });
+          });
+        }, { rootMargin: "-25% 0px -60% 0px" });
+        sections.forEach((section) => observer.observe(section));
+      }
+
+      document.querySelectorAll(".benchmark-card").forEach(initBenchmark);
+      initCalculator();
+      initScrollSpy();
+    })();
+  </script>
+
 </body>
 </html>
