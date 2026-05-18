@@ -17,8 +17,9 @@ DOCS_DIR = Path(__file__).resolve().parents[3] / "docs"
 PROVIDER_COLORS = {
     "openai": "#10b981",
     "anthropic": "#f59e0b",
-    "groq": "#6366f1",
-    "google": "#38bdf8",
+    "groq": "#818cf8",
+    "google": "#60a5fa",
+    "aws": "#f97316",
     "mistral": "#ec4899",
     "deepseek": "#f43f5e",
 }
@@ -44,15 +45,109 @@ def _format_money(value: float | None, decimals: int = 3) -> str:
     return f"${value:.{decimals}f}"
 
 
-def _pareto_svg(results: list[BenchmarkResult], width: int = 720, height: int = 420) -> str:
+def _provider_badge(provider: str) -> str:
+    color = PROVIDER_COLORS.get(provider, "#94a3b8")
+    return (
+        f'<span class="provider-badge" style="--provider-color: {color}">'
+        f"{escape(provider)}</span>"
+    )
+
+
+def _quality_class(quality: float) -> str:
+    if quality >= 95:
+        return "quality-good"
+    if quality >= 85:
+        return "quality-mid"
+    return "quality-low"
+
+
+def _benchmark_picks(results: list[BenchmarkResult]) -> dict[str, BenchmarkResult]:
+    scored = [r for r in results if r.quality_score > 0]
+    if not scored:
+        return {}
+    fast_candidates = [r for r in scored if r.quality_score >= 80] or scored
+    return {
+        "Best Quality": max(scored, key=lambda r: (r.quality_score, -r.cost_per_1k_requests)),
+        "Best Value": max(scored, key=_quality_per_dollar),
+        "Fastest": min(fast_candidates, key=lambda r: (r.latency_p50_ms, -r.quality_score)),
+    }
+
+
+def _quick_picks_html(results: list[BenchmarkResult]) -> str:
+    picks = _benchmark_picks(results)
+    if not picks:
+        return ""
+    stats = {
+        "Best Quality": lambda r: f"{r.quality_score:.0f} quality, ${r.cost_per_1k_requests:.2f}/1K",
+        "Best Value": lambda r: f"{_quality_per_dollar(r):.1f} quality/$",
+        "Fastest": lambda r: f"{r.latency_p50_ms:.0f}ms p50, {r.quality_score:.0f} quality",
+    }
+    cards = []
+    for label, result in picks.items():
+        cards.append(
+            f"""<article class="pick-card">
+              <div class="pick-card__label">{escape(label)}</div>
+              <div class="pick-card__model">{escape(result.display_name)}</div>
+              <div class="pick-card__provider">{_provider_badge(result.provider.value)}</div>
+              <div class="pick-card__stat">{escape(stats[label](result))}</div>
+            </article>"""
+        )
+    return f'<div class="pick-cards" aria-label="Quick picks">{"".join(cards)}</div>'
+
+
+def _benchmark_chart(results: list[BenchmarkResult]) -> str:
     scored = [r for r in results if r.quality_score > 0]
     if len(scored) < 2:
-        return "<p class='muted'>Need at least 2 models with scores for a Pareto chart.</p>"
+        return "<p class='muted'>Need at least 2 models with scores for a chart.</p>"
+    qualities = {round(r.quality_score, 6) for r in scored}
+    if len(qualities) == 1:
+        return _cost_bar_svg(scored)
+    return _scatter_svg(scored)
 
+
+def _cost_bar_svg(results: list[BenchmarkResult], width: int = 720) -> str:
+    sorted_results = sorted(results, key=lambda r: r.cost_per_1k_requests)
+    row_height = 28
+    margin_left = 190
+    margin_right = 92
+    margin_top = 24
+    margin_bottom = 34
+    height = margin_top + margin_bottom + row_height * len(sorted_results)
+    max_cost = max(r.cost_per_1k_requests for r in sorted_results) or 1
+    plot_width = width - margin_left - margin_right
+    bars = []
+    for index, result in enumerate(sorted_results):
+        y = margin_top + index * row_height
+        bar_width = max(result.cost_per_1k_requests / max_cost * plot_width, 2)
+        color = PROVIDER_COLORS.get(result.provider.value, "#94a3b8")
+        bars.append(
+            f"""<g>
+              <text x="{margin_left - 10}" y="{y + 17}" text-anchor="end" class="bar-label">
+                {escape(result.display_name)}
+              </text>
+              <rect x="{margin_left}" y="{y + 5}" width="{bar_width:.1f}" height="14"
+                    rx="7" fill="{color}">
+                <title>{escape(result.display_name)} | {escape(result.provider.value)} |
+                  Cost: ${result.cost_per_1k_requests:.2f}/1K | Quality: {result.quality_score:.0f} |
+                  Latency: {result.latency_p50_ms:.0f}ms</title>
+              </rect>
+              <text x="{margin_left + bar_width + 8:.1f}" y="{y + 17}" class="bar-value">
+                ${result.cost_per_1k_requests:.2f}
+              </text>
+            </g>"""
+        )
+    return f"""<svg viewBox="0 0 {width} {height}" class="benchmark-chart bar-chart" role="img"
+      aria-label="Cost per model sorted cheapest first">
+      <text x="{margin_left}" y="{height - 8}" class="axis-label">Cost / 1K reqs</text>
+      {"".join(bars)}
+    </svg>"""
+
+
+def _scatter_svg(results: list[BenchmarkResult], width: int = 720, height: int = 460) -> str:
     import math
 
-    costs = [max(r.cost_per_1k_requests, 0.001) for r in scored]
-    qualities = [r.quality_score for r in scored]
+    costs = [max(r.cost_per_1k_requests, 0.001) for r in results]
+    qualities = [r.quality_score for r in results]
     min_c, max_c = min(costs), max(costs)
     min_q, max_q = min(qualities), max(qualities)
     pad_q = (max_q - min_q) * 0.1 or 5
@@ -80,40 +175,41 @@ def _pareto_svg(results: list[BenchmarkResult], width: int = 720, height: int = 
             height - margin_top - margin_bottom
         )
 
-    frontier = compute_pareto_frontier(scored)
-    frontier_pts = " ".join(f"{px(r.cost_per_1k_requests):.1f},{py(r.quality_score):.1f}" for r in frontier)
-    cheapest = min(scored, key=lambda r: (r.cost_per_1k_requests, -r.quality_score))
-    highest_quality = max(scored, key=lambda r: (r.quality_score, -r.cost_per_1k_requests))
-    best_value = max(scored, key=_quality_per_dollar)
+    frontier = {id(r) for r in compute_pareto_frontier(results)}
+    cheapest = min(results, key=lambda r: (r.cost_per_1k_requests, -r.quality_score))
+    highest_quality = max(results, key=lambda r: (r.quality_score, -r.cost_per_1k_requests))
+    best_value = max(results, key=_quality_per_dollar)
     labels: dict[int, list[str]] = {}
     labels.setdefault(id(cheapest), []).append("Cheapest")
-    labels.setdefault(id(highest_quality), []).append("Highest quality")
+    labels.setdefault(id(highest_quality), []).append("Best quality")
     labels.setdefault(id(best_value), []).append("Best value")
+    median_cost = sorted(costs)[len(costs) // 2]
+    median_quality = sorted(qualities)[len(qualities) // 2]
 
     dots = []
-    for r in scored:
-        on_frontier = r in frontier
-        color = PROVIDER_COLORS.get(r.provider.value, "#94a3b8")
-        classes = "chart-point chart-point--frontier" if on_frontier else "chart-point"
+    for result in results:
+        color = PROVIDER_COLORS.get(result.provider.value, "#94a3b8")
+        classes = "chart-point chart-point--frontier" if id(result) in frontier else "chart-point"
         dots.append(
-            f'<circle class="{classes}" cx="{px(r.cost_per_1k_requests):.1f}" '
-            f'cy="{py(r.quality_score):.1f}" r="6.5" fill="{color}" '
-            f'stroke="#0f172a" stroke-width="1.5">'
-            f"<title>{escape(r.display_name)}: {r.quality_score:.0f}% @ "
-            f"${r.cost_per_1k_requests:.2f}/1K</title></circle>"
+            f'<circle class="{classes}" cx="{px(result.cost_per_1k_requests):.1f}" '
+            f'cy="{py(result.quality_score):.1f}" r="10" fill="{color}" '
+            f'stroke="#0f1117" stroke-width="1.5">'
+            f"<title>{escape(result.display_name)} | {escape(result.provider.value)} | "
+            f"Quality: {result.quality_score:.0f} | Cost: ${result.cost_per_1k_requests:.2f}/1K | "
+            f"Latency: {result.latency_p50_ms:.0f}ms</title></circle>"
         )
-        if id(r) in labels:
-            label_text = " + ".join(labels[id(r)])
-            x = px(r.cost_per_1k_requests)
-            y = py(r.quality_score)
-            dx = 10 if x < width - 200 else -10
+        if id(result) in labels:
+            label_text = " + ".join(labels[id(result)])
+            x = px(result.cost_per_1k_requests)
+            y = py(result.quality_score)
+            dx = 12 if x < width - 220 else -12
             anchor = "start" if dx > 0 else "end"
             dots.append(
-                f'<text class="point-label" x="{x + dx:.1f}" y="{y - 10:.1f}" '
-                f'text-anchor="{anchor}">{escape(label_text)}: {escape(r.display_name)}</text>'
+                f'<text class="point-label" x="{x + dx:.1f}" y="{y - 16:.1f}" '
+                f'text-anchor="{anchor}">{escape(label_text)}: {escape(result.display_name)}</text>'
             )
 
-    providers = sorted({r.provider.value for r in scored})
+    providers = sorted({r.provider.value for r in results})
     legend = "".join(
         f'<g transform="translate(0,{i * 22})"><circle cx="0" cy="0" r="5" '
         f'fill="{PROVIDER_COLORS.get(provider, "#94a3b8")}"/>'
@@ -125,23 +221,28 @@ def _pareto_svg(results: list[BenchmarkResult], width: int = 720, height: int = 
         f'<g><line x1="{px(tick):.1f}" y1="{height - margin_bottom:.1f}" '
         f'x2="{px(tick):.1f}" y2="{height - margin_bottom + 5:.1f}" '
         f'stroke="#475569"/><text x="{px(tick):.1f}" y="{height - margin_bottom + 20:.1f}" '
-        f'text-anchor="middle" fill="#94a3b8" font-size="11">${tick:.2g}</text></g>'
+        f'text-anchor="middle" fill="#9ca3b4" font-size="11">${tick:.2g}</text></g>'
         for tick in ticks
     )
 
-    return f"""<svg viewBox="0 0 {width} {height}" class="pareto-chart" role="img"
+    return f"""<svg viewBox="0 0 {width} {height}" class="benchmark-chart scatter-chart" role="img"
       aria-label="Cost vs quality chart using a logarithmic cost scale">
+      <rect x="{margin_left}" y="{margin_top}" width="{px(median_cost) - margin_left:.1f}"
+            height="{py(median_quality) - margin_top:.1f}" fill="rgba(16, 185, 129, 0.08)"/>
+      <line x1="{px(median_cost):.1f}" y1="{margin_top}" x2="{px(median_cost):.1f}"
+            y2="{height - margin_bottom}" class="guide-line"/>
+      <line x1="{margin_left}" y1="{py(median_quality):.1f}" x2="{width - margin_right}"
+            y2="{py(median_quality):.1f}" class="guide-line"/>
+      <text x="{margin_left + 12}" y="{margin_top + 18}" class="sweet-spot-label">Sweet spot</text>
       <line x1="{margin_left}" y1="{height - margin_bottom}" x2="{width - margin_right}"
-            y2="{height - margin_bottom}" stroke="#334155"/>
+            y2="{height - margin_bottom}" stroke="#363b4a"/>
       <line x1="{margin_left}" y1="{margin_top}" x2="{margin_left}"
-            y2="{height - margin_bottom}" stroke="#334155"/>
+            y2="{height - margin_bottom}" stroke="#363b4a"/>
       {tick_marks}
-      <text x="{width // 2}" y="{height - 8}" text-anchor="middle" fill="#94a3b8" font-size="12">
+      <text x="{width // 2}" y="{height - 8}" text-anchor="middle" fill="#9ca3b4" font-size="12">
         Cost / 1K reqs ($, log scale)</text>
-      <text x="16" y="{height // 2}" text-anchor="middle" fill="#94a3b8" font-size="12"
+      <text x="16" y="{height // 2}" text-anchor="middle" fill="#9ca3b4" font-size="12"
             transform="rotate(-90 16 {height // 2})">Quality</text>
-      <polyline points="{frontier_pts}" fill="none" stroke="#e2e8f0" stroke-width="2"
-                stroke-dasharray="5,4"/>
       <g class="chart-legend" transform="translate({width - 150}, {margin_top + 8})">{legend}</g>
       {"".join(dots)}
     </svg>"""
@@ -157,30 +258,45 @@ def _pricing_rows(models: list[ModelPricing]) -> str:
             else ""
         )
         rows.append(
-            f"<tr><td>{escape(m.provider.value)}</td>"
-            f"<td>{escape(m.display_name)}</td>"
-            f"<td>${m.input_per_1m:.3f}</td>"
-            f"<td>${m.output_per_1m:.3f}</td>"
-            f"<td>{_format_money(cached)}</td>"
+            f"<tr><td>{escape(m.display_name)}</td>"
+            f"<td>{_provider_badge(m.provider.value)}</td>"
             f"<td class='highlight'>${m.avg_per_1m:.3f}</td>"
-            f"<td>${m.avg_per_1m * 0.5:.3f}</td>"
-            f"<td class='muted'>{source}</td></tr>"
+            f"<td class='muted'>{source}</td>"
+            f"<td class='pricing-detail'>${m.input_per_1m:.3f}</td>"
+            f"<td class='pricing-detail'>${m.output_per_1m:.3f}</td>"
+            f"<td class='pricing-detail'>{_format_money(cached)}</td>"
+            f"<td class='pricing-detail'>${m.avg_per_1m * 0.5:.3f}</td></tr>"
         )
     return "\n".join(rows)
 
 
-def _calculator_rows(models: list[ModelPricing]) -> str:
+def _average_quality_by_model(benchmarks: dict[str, list[BenchmarkResult]]) -> dict[str, float]:
+    scores: dict[str, list[float]] = {}
+    for results in benchmarks.values():
+        for result in results:
+            if result.quality_score > 0:
+                scores.setdefault(result.model_id, []).append(result.quality_score)
+    return {model_id: sum(values) / len(values) for model_id, values in scores.items()}
+
+
+def _calculator_rows(models: list[ModelPricing], average_quality: dict[str, float]) -> str:
     rows = []
     for m in sorted(models, key=lambda x: (5000 * x.input_per_1m + 2000 * x.output_per_1m)):
         monthly = 100 * 30 * (
             (5000 * m.input_per_1m / 1_000_000) + (2000 * m.output_per_1m / 1_000_000)
         )
+        quality = average_quality.get(m.model_id)
+        quality_value = f"{quality:.1f}" if quality is not None else ""
+        quality_class = _quality_class(quality) if quality is not None else ""
         rows.append(
             f"<tr data-provider='{escape(m.provider.value)}' "
             f"data-input-price='{m.input_per_1m:.6f}' "
-            f"data-output-price='{m.output_per_1m:.6f}'>"
-            f"<td>{escape(m.display_name)}</td><td>{escape(m.provider.value)}</td>"
-            f"<td class='calculator-cost'>${monthly:.2f}</td></tr>"
+            f"data-output-price='{m.output_per_1m:.6f}' "
+            f"data-quality='{quality or 0:.6f}'>"
+            f"<td>{escape(m.display_name)} <span class='recommended-badge'>Recommended</span></td>"
+            f"<td>{_provider_badge(m.provider.value)}</td>"
+            f"<td class='calculator-cost'>${monthly:.2f}</td>"
+            f"<td class='{quality_class}'>{quality_value}</td></tr>"
         )
     return "\n".join(rows)
 
@@ -201,18 +317,20 @@ def _benchmark_table(results: list[BenchmarkResult], table_id: str) -> str:
     for index, r in enumerate(sorted_results):
         tags = ", ".join(r.tags) if r.tags else ""
         value = _quality_per_dollar(r)
+        quality_class = _quality_class(r.quality_score)
         rows.append(
             f"<tr data-default-index='{index}' data-provider='{escape(r.provider.value)}' "
             f"data-cost='{r.cost_per_1k_requests:.6f}' data-quality='{r.quality_score:.6f}'>"
             f"<td data-value='{escape(r.display_name.lower())}'>{escape(r.display_name)}</td>"
-            f"<td data-value='{escape(r.provider.value)}'>{escape(r.provider.value)}</td>"
-            f"<td data-value='{r.quality_score:.6f}'>{r.quality_score:.0f}</td>"
+            f"<td data-value='{escape(r.provider.value)}'>{_provider_badge(r.provider.value)}</td>"
+            f"<td class='{quality_class}' data-value='{r.quality_score:.6f}'>{r.quality_score:.0f}</td>"
             f"<td data-value='{r.latency_p50_ms:.6f}'>{r.latency_p50_ms:.0f}ms</td>"
             f"<td data-value='{r.cost_per_1k_requests:.6f}'>${r.cost_per_1k_requests:.2f}</td>"
             f"<td data-value='{value:.6f}'>{value:.1f}</td>"
             f"<td data-value='{escape(tags.lower())}'>{escape(tags)}</td></tr>"
         )
     return f"""<div class="benchmark-card" data-table-id="{escape(table_id)}">
+      {_quick_picks_html(results)}
       <div class="filter-bar" aria-label="Filters for {escape(table_id)} benchmark">
         <div class="filter-group">
           <span class="filter-label">Provider</span>
@@ -273,6 +391,7 @@ def generate_dashboard(output_dir: Path | None = None) -> Path:
         snapshot_date = snapshot.captured_at.strftime("%Y-%m-%d")
 
     benchmarks = load_all_benchmarks()
+    average_quality = _average_quality_by_model(benchmarks)
     updated = utc_now().strftime("%Y-%m-%d %H:%M UTC")
 
     task_sections = []
@@ -282,7 +401,7 @@ def generate_dashboard(output_dir: Path | None = None) -> Path:
             f"""<section class="card" id="{escape(task_id)}">
               <h2>{escape(task.replace("_", " ").title())}</h2>
               {_benchmark_table(results, task)}
-              <div class="chart-wrap">{_pareto_svg(results)}</div>
+              <div class="chart-wrap">{_benchmark_chart(results)}</div>
             </section>"""
         )
 
@@ -442,13 +561,29 @@ def generate_dashboard(output_dir: Path | None = None) -> Path:
             );
             row.dataset.monthlyCost = monthly.toFixed(6);
             row.querySelector(".calculator-cost").textContent = `$${monthly.toFixed(2)}`;
+            row.classList.remove("is-recommended");
           });
+          const recommended = rows
+            .filter((row) => numberValue(row.dataset.monthlyCost) <= 50 && numberValue(row.dataset.quality) > 0)
+            .sort((a, b) => numberValue(b.dataset.quality) - numberValue(a.dataset.quality))[0];
+          if (recommended) recommended.classList.add("is-recommended");
           rows
             .sort((a, b) => numberValue(a.dataset.monthlyCost) - numberValue(b.dataset.monthlyCost))
             .forEach((row) => tbody.appendChild(row));
         }
         [tasks, inputTokens, outputTokens].forEach((input) => input.addEventListener("input", render));
         render();
+      }
+
+      function initPricingDetails() {
+        const button = document.querySelector(".pricing-toggle");
+        const table = document.querySelector(".pricing-table");
+        if (!button || !table) return;
+        button.addEventListener("click", () => {
+          const expanded = table.classList.toggle("show-details");
+          button.setAttribute("aria-expanded", String(expanded));
+          button.textContent = expanded ? "Hide details" : "Show details";
+        });
       }
 
       function initScrollSpy() {
@@ -469,6 +604,7 @@ def generate_dashboard(output_dir: Path | None = None) -> Path:
 
       document.querySelectorAll(".benchmark-card").forEach(initBenchmark);
       initCalculator();
+      initPricingDetails();
       initScrollSpy();
     })();
   </script>
@@ -483,83 +619,150 @@ def generate_dashboard(output_dir: Path | None = None) -> Path:
 {_ga4_script()}
   <style>
     :root {{
-      --bg: #0b1120; --card: #131c31; --text: #e2e8f0; --muted: #94a3b8;
-      --accent: #818cf8; --green: #10b981; --border: #1e293b;
-      --amber: #f59e0b; --indigo: #6366f1;
+      --bg-base: #0f1117; --bg-surface: #1a1d27; --bg-elevated: #242836;
+      --bg-input: #2a2e3b; --text-primary: #f0f2f5; --text-secondary: #9ca3b4;
+      --text-muted: #5c6478; --color-openai: #10b981; --color-anthropic: #f59e0b;
+      --color-groq: #818cf8; --color-google: #60a5fa; --color-aws: #f97316;
+      --color-accent: #6366f1; --color-success: #10b981; --color-warning: #f59e0b;
+      --color-danger: #ef4444; --border-subtle: #2a2e3b; --border-default: #363b4a;
+      --text-xs: 0.75rem; --text-sm: 0.875rem; --text-base: 1rem; --text-lg: 1.25rem;
+      --text-xl: 1.5rem; --text-2xl: 2rem; --font-normal: 400; --font-medium: 500;
+      --font-semibold: 600; --font-bold: 700; --space-1: 4px; --space-2: 8px;
+      --space-3: 12px; --space-4: 16px; --space-5: 24px; --space-6: 32px;
+      --space-7: 48px; --space-8: 64px;
     }}
     * {{ box-sizing: border-box; }}
     html {{ scroll-behavior: smooth; }}
     body {{
-      font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
-      background: var(--bg); color: var(--text); margin: 0; line-height: 1.5;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', sans-serif;
+      background: var(--bg-base); color: var(--text-primary); margin: 0; line-height: 1.5;
     }}
-    .wrap {{ max-width: 1100px; margin: 0 auto; padding: 2rem 1.25rem 4rem; }}
-    h1 {{ font-size: 1.75rem; margin: 0 0 0.25rem; }}
-    .lede {{ color: var(--muted); margin: 0 0 2rem; }}
-    .meta {{ font-size: 0.85rem; color: var(--muted); margin-bottom: 2rem; }}
+    .wrap {{ max-width: 1100px; margin: 0 auto; padding: var(--space-6) var(--space-6) var(--space-8); }}
+    h1 {{ font-size: var(--text-2xl); font-weight: var(--font-bold); margin: 0 0 var(--space-1); }}
+    .lede {{ color: var(--text-secondary); margin: 0 0 var(--space-5); }}
+    .meta {{ font-size: var(--text-sm); color: var(--text-secondary); margin-bottom: var(--space-5); }}
     .top-nav {{
-      position: sticky; top: 0; z-index: 10; display: flex; flex-wrap: wrap; gap: 0.5rem;
-      margin: 0 -0.25rem 1.5rem; padding: 0.65rem 0.25rem;
-      background: color-mix(in srgb, var(--bg) 88%, transparent);
+      position: sticky; top: 0; z-index: 10; display: flex; flex-wrap: wrap; gap: var(--space-2);
+      margin: 0 0 var(--space-6); padding: var(--space-2) 0;
+      background: color-mix(in srgb, var(--bg-base) 90%, transparent);
       backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border-subtle);
     }}
     .top-nav a {{
-      border: 1px solid var(--border); border-radius: 999px; color: var(--muted);
-      padding: 0.3rem 0.7rem; text-decoration: none; font-size: 0.82rem;
+      color: var(--text-secondary); padding: var(--space-2) var(--space-4);
+      text-decoration: none; font-size: var(--text-sm); font-weight: var(--font-medium);
+      border-bottom: 2px solid transparent; transition: color 0.15s ease, border-color 0.15s ease;
     }}
     .top-nav a:hover, .top-nav a.is-active {{
-      border-color: var(--accent); color: var(--text); background: rgba(129, 140, 248, 0.12);
+      color: var(--text-primary); border-bottom-color: var(--color-accent);
     }}
     .card {{
-      background: var(--card); border: 1px solid var(--border);
-      border-radius: 12px; padding: 1.25rem 1.5rem; margin-bottom: 1.5rem;
+      background: var(--bg-surface); border: 1px solid var(--border-subtle);
+      border-radius: 12px; padding: var(--space-5); margin-bottom: var(--space-8);
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
     }}
-    h2 {{ font-size: 1.1rem; margin: 0 0 1rem; color: var(--accent); }}
-    table {{ width: 100%; border-collapse: collapse; font-size: 0.9rem; }}
-    th, td {{ text-align: left; padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--border); }}
-    th {{ color: var(--muted); font-weight: 500; }}
-    tbody tr:hover {{ background: rgba(255, 255, 255, 0.05); }}
+    h2 {{ font-size: var(--text-lg); margin: 0 0 var(--space-4); color: var(--text-primary); font-weight: var(--font-semibold); }}
+    table {{ width: 100%; border-collapse: separate; border-spacing: 0; font-size: var(--text-sm); }}
+    th, td {{
+      text-align: left; padding: var(--space-3) var(--space-4);
+      border-bottom: 1px solid var(--border-subtle); font-variant-numeric: tabular-nums;
+    }}
+    th {{
+      color: var(--text-secondary); font-size: var(--text-xs); font-weight: var(--font-medium);
+      text-transform: uppercase; letter-spacing: 0.05em; border-bottom-color: var(--border-default);
+    }}
+    tbody tr:hover td {{ background: var(--bg-elevated); }}
     tr[hidden] {{ display: none; }}
     th button {{
       appearance: none; border: 0; background: transparent; color: inherit; cursor: pointer;
       font: inherit; padding: 0; text-align: left; white-space: nowrap;
     }}
-    th button:hover, th button.is-sorted {{ color: var(--text); }}
+    th button:hover, th button.is-sorted {{ color: var(--text-primary); }}
+    button, input, a {{ transition: 0.15s ease; }}
+    button:focus-visible, input:focus-visible, a:focus-visible {{
+      outline: 2px solid var(--color-accent); outline-offset: 2px;
+    }}
     .table-wrap {{ overflow-x: auto; }}
-    .highlight {{ color: var(--green); font-weight: 600; }}
-    .muted {{ color: var(--muted); }}
-    code {{ background: #1e293b; padding: 0.15rem 0.4rem; border-radius: 4px; font-size: 0.85em; }}
-    .chart-wrap {{ margin-top: 1rem; overflow-x: auto; }}
-    .pareto-chart {{ width: 100%; max-width: 720px; height: auto; }}
-    .chart-point--frontier {{ filter: drop-shadow(0 0 4px rgba(226, 232, 240, 0.5)); }}
-    .point-label, .legend-label {{ fill: #e2e8f0; font-size: 11px; font-weight: 600; }}
-    .legend-label {{ fill: #cbd5e1; text-transform: capitalize; }}
-    footer {{ margin-top: 2rem; font-size: 0.8rem; color: var(--muted); }}
-    a {{ color: var(--accent); }}
-    .small {{ font-size: 0.85rem; margin: -0.5rem 0 1rem; }}
+    .highlight, .quality-good {{ color: var(--color-success); font-weight: var(--font-semibold); }}
+    .quality-mid {{ color: var(--color-warning); font-weight: var(--font-semibold); }}
+    .quality-low {{ color: var(--color-danger); font-weight: var(--font-semibold); }}
+    .muted {{ color: var(--text-secondary); }}
+    code {{ background: var(--bg-input); padding: 0.15rem 0.4rem; border-radius: 4px; font-size: 0.85em; }}
+    .chart-wrap {{
+      background: var(--bg-surface); border: 1px solid var(--border-subtle);
+      border-radius: 12px; padding: var(--space-5); margin-top: var(--space-5);
+      min-height: 400px; overflow-x: auto;
+    }}
+    .benchmark-chart {{ width: 100%; max-width: 720px; height: auto; }}
+    .chart-point--frontier {{ filter: drop-shadow(0 0 7px rgba(240, 242, 245, 0.75)); stroke: #f0f2f5; stroke-width: 2.5; }}
+    .guide-line {{ stroke: var(--border-default); stroke-dasharray: 6 6; }}
+    .point-label, .legend-label, .bar-label, .bar-value, .axis-label, .sweet-spot-label {{
+      fill: var(--text-primary); font-size: 11px; font-weight: var(--font-semibold);
+    }}
+    .bar-label, .legend-label {{ fill: var(--text-secondary); }}
+    .bar-value, .axis-label {{ fill: var(--text-secondary); }}
+    .sweet-spot-label {{ fill: var(--color-success); }}
+    footer {{ margin-top: var(--space-6); font-size: var(--text-xs); color: var(--text-secondary); }}
+    a {{ color: var(--color-accent); }}
+    .small {{ font-size: var(--text-sm); margin: calc(-1 * var(--space-2)) 0 var(--space-4); }}
+    .pick-cards {{ display: flex; gap: var(--space-4); margin: 0 0 var(--space-5); }}
+    .pick-card {{
+      background: var(--bg-surface); border: 1px solid var(--border-default);
+      border-radius: 12px; padding: var(--space-4) var(--space-5); flex: 1; min-width: 200px;
+    }}
+    .pick-card__label {{
+      font-size: var(--text-xs); color: var(--text-secondary); text-transform: uppercase;
+      letter-spacing: 0.05em; margin-bottom: var(--space-1);
+    }}
+    .pick-card__model {{ font-size: var(--text-base); font-weight: var(--font-semibold); color: var(--text-primary); }}
+    .pick-card__provider {{ margin-top: var(--space-2); }}
+    .pick-card__stat {{ font-size: var(--text-sm); color: var(--text-secondary); margin-top: var(--space-1); }}
+    .provider-badge {{
+      display: inline-flex; align-items: center; gap: 6px; font-size: var(--text-xs);
+      padding: 2px 8px; border-radius: 4px; background: var(--bg-input); color: var(--text-primary);
+      text-transform: capitalize;
+    }}
+    .provider-badge::before {{
+      content: ''; width: 8px; height: 8px; border-radius: 50%; background: var(--provider-color);
+    }}
     .filter-bar, .calculator-controls {{
-      display: flex; flex-wrap: wrap; gap: 0.8rem; align-items: end; margin: 0 0 1rem;
-      padding: 0.85rem; border: 1px solid var(--border); border-radius: 10px;
-      background: rgba(15, 23, 42, 0.45);
+      display: flex; flex-wrap: wrap; gap: var(--space-4); align-items: end; margin: 0 0 var(--space-4);
+      padding: var(--space-4); border: 1px solid var(--border-default); border-radius: 8px;
+      background: var(--bg-elevated);
     }}
     .filter-group {{ display: grid; gap: 0.35rem; }}
     .filter-label, .filter-field span, .filter-field {{
-      color: var(--muted); font-size: 0.78rem; font-weight: 600;
+      color: var(--text-secondary); font-size: var(--text-xs); font-weight: var(--font-semibold);
     }}
     .chip-group {{ display: flex; flex-wrap: wrap; gap: 0.4rem; }}
     .chip {{
-      border: 1px solid var(--border); border-radius: 999px; background: transparent;
-      color: var(--muted); cursor: pointer; padding: 0.3rem 0.6rem; text-transform: capitalize;
+      border: 1px solid var(--border-default); border-radius: 999px; background: transparent;
+      color: var(--text-secondary); cursor: pointer; padding: var(--space-1) var(--space-3);
+      text-transform: capitalize; font-size: var(--text-xs);
     }}
-    .chip.is-active {{ border-color: var(--accent); color: var(--text); background: rgba(99, 102, 241, 0.18); }}
+    .chip:hover {{ transform: scale(1.02); }}
+    .chip.is-active {{ border-color: var(--color-accent); color: white; background: var(--color-accent); }}
     input {{
-      border: 1px solid var(--border); border-radius: 8px; background: #0f172a; color: var(--text);
-      padding: 0.45rem 0.55rem;
+      border: 1px solid var(--border-default); border-radius: 8px; background: var(--bg-input);
+      color: var(--text-primary); padding: 0.45rem 0.55rem;
     }}
     input[type="range"] {{ min-width: 160px; padding: 0; }}
     .filter-field {{ display: grid; gap: 0.35rem; }}
     .filter-field--wide {{ min-width: 200px; }}
-    .calculator-controls label {{ display: grid; gap: 0.35rem; color: var(--muted); font-size: 0.78rem; font-weight: 600; }}
+    .calculator-controls label {{ display: grid; gap: 0.35rem; color: var(--text-secondary); font-size: var(--text-xs); font-weight: var(--font-semibold); }}
+    .recommended-badge {{
+      display: none; margin-left: var(--space-2); border-radius: 999px; padding: 2px 8px;
+      background: rgba(16, 185, 129, 0.15); color: var(--color-success); font-size: var(--text-xs);
+      font-weight: var(--font-semibold);
+    }}
+    tr.is-recommended .recommended-badge {{ display: inline-flex; }}
+    .pricing-toggle {{
+      border: 1px solid var(--border-default); border-radius: 8px; background: var(--bg-input);
+      color: var(--text-primary); padding: var(--space-2) var(--space-4); cursor: pointer;
+      margin-bottom: var(--space-4);
+    }}
+    .pricing-detail {{ display: none; }}
+    .pricing-table.show-details .pricing-detail {{ display: table-cell; }}
     .badge {{
       display: inline-block; font-size: 0.7rem; padding: 0.15rem 0.5rem;
       border-radius: 999px; vertical-align: middle; margin-left: 0.5rem;
@@ -567,10 +770,24 @@ def generate_dashboard(output_dir: Path | None = None) -> Path:
     }}
     .badge--live {{ background: rgba(34, 197, 94, 0.15); color: #4ade80; }}
     .badge--ref {{ background: rgba(148, 163, 184, 0.18); color: #cbd5e1; }}
+    @keyframes skeleton-pulse {{
+      0%, 100% {{ opacity: 0.5; }}
+      50% {{ opacity: 1; }}
+    }}
+    .skeleton-row {{ animation: skeleton-pulse 1.2s ease-in-out infinite; }}
+    @media (max-width: 1024px) {{
+      .chart-wrap {{ min-height: 300px; }}
+    }}
+    @media (max-width: 639px) {{
+      .wrap {{ padding-inline: var(--space-4); }}
+      .pick-cards {{ flex-direction: column; }}
+      .filter-bar {{ flex-wrap: wrap; }}
+      table {{ font-size: var(--text-xs); }}
+      th, td {{ padding: var(--space-2) var(--space-3); }}
+    }}
     @media (max-width: 768px) {{
-      .wrap {{ padding-inline: 1rem; }}
       th:first-child, td:first-child {{
-        position: sticky; left: 0; z-index: 1; background: var(--card);
+        position: sticky; left: 0; z-index: 1; background: var(--bg-surface);
       }}
       .top-nav {{ top: 0; }}
     }}
@@ -609,8 +826,8 @@ def generate_dashboard(output_dir: Path | None = None) -> Path:
       </div>
       <div class="table-wrap">
         <table>
-          <thead><tr><th>Model</th><th>Provider</th><th>Estimated monthly cost</th></tr></thead>
-          <tbody>{_calculator_rows(models)}</tbody>
+          <thead><tr><th>Model</th><th>Provider</th><th>Estimated monthly cost</th><th>Avg quality</th></tr></thead>
+          <tbody>{_calculator_rows(models, average_quality)}</tbody>
         </table>
       </div>
     </section>
@@ -635,10 +852,12 @@ def generate_dashboard(output_dir: Path | None = None) -> Path:
       <strong>{escape(CATALOG_VERIFIED)}</strong>. Click <em>source</em> on any row to
       verify the latest rate. Prices in USD per 1M tokens. Cached input discounts are
       shown where the provider publishes a broad discount; batch average assumes 50% off.</p>
-      <div class="table-wrap"><table>
+      <button type="button" class="pricing-toggle" aria-expanded="false">Show details</button>
+      <div class="table-wrap"><table class="pricing-table">
         <thead><tr>
-          <th>Provider</th><th>Model</th><th>Input/1M</th><th>Output/1M</th>
-          <th>Cached Input/1M</th><th>Avg/1M</th><th>Batch Avg/1M</th><th>Source</th>
+          <th>Model</th><th>Provider</th><th>Avg/1M</th><th>Source</th>
+          <th class="pricing-detail">Input/1M</th><th class="pricing-detail">Output/1M</th>
+          <th class="pricing-detail">Cached Input/1M</th><th class="pricing-detail">Batch Avg/1M</th>
         </tr></thead>
         <tbody>{_pricing_rows(models)}</tbody>
       </table></div>
