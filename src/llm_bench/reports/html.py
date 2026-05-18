@@ -61,6 +61,28 @@ def _quality_class(quality: float) -> str:
     return "quality-low"
 
 
+def _short_name(display_name: str) -> str:
+    """Shorten a model name for use as a compact in-chart label (~14 chars)."""
+    name = display_name
+    if "(" in name and name.endswith(")"):
+        name = name[: name.rfind("(")].strip()
+    name = (
+        name.replace("Claude ", "")
+        .replace("GPT OSS ", "OSS ")
+        .replace("Llama ", "L")
+    )
+    return name if len(name) <= 14 else name[:13] + "…"
+
+
+def _pricing_tier(avg_per_1m: float) -> tuple[str, str, str]:
+    """Return (tier_key, label, header_text) for a pricing tier."""
+    if avg_per_1m < 1.0:
+        return "budget", "Budget", "Budget (< $1 / 1M tokens)"
+    if avg_per_1m < 5.0:
+        return "mid", "Mid", "Mid ($1 – $5 / 1M tokens)"
+    return "premium", "Premium", "Premium (≥ $5 / 1M tokens)"
+
+
 def _benchmark_picks(results: list[BenchmarkResult]) -> dict[str, BenchmarkResult]:
     scored = [r for r in results if r.quality_score > 0]
     if not scored:
@@ -96,50 +118,420 @@ def _quick_picks_html(results: list[BenchmarkResult]) -> str:
 
 
 def _benchmark_chart(results: list[BenchmarkResult]) -> str:
+    """Return chart HTML, possibly with a Quality↔Latency view toggle.
+
+    - When all models share the same quality score, render a single horizontal
+      cost bar chart (no toggle).
+    - Otherwise render a Quality-vs-Cost scatter plus a Latency-vs-Cost scatter,
+      with toggle buttons to switch views.
+    """
     scored = [r for r in results if r.quality_score > 0]
     if len(scored) < 2:
         return "<p class='muted'>Need at least 2 models with scores for a chart.</p>"
     qualities = {round(r.quality_score, 6) for r in scored}
     if len(qualities) == 1:
         return _cost_bar_svg(scored)
-    return _scatter_svg(scored)
+    quality_svg = _scatter_svg(scored)
+    latency_svg = _latency_scatter_svg(scored)
+    return f"""<div class="chart-toggle" role="tablist" aria-label="Chart view">
+        <button type="button" class="chart-toggle-btn is-active" data-view="quality-cost"
+                role="tab" aria-selected="true">Quality vs Cost</button>
+        <button type="button" class="chart-toggle-btn" data-view="latency-cost"
+                role="tab" aria-selected="false">Latency vs Cost</button>
+      </div>
+      <div class="chart-view" data-view="quality-cost">{quality_svg}</div>
+      <div class="chart-view" data-view="latency-cost" hidden>{latency_svg}</div>"""
 
 
 def _cost_bar_svg(results: list[BenchmarkResult], width: int = 720) -> str:
     sorted_results = sorted(results, key=lambda r: r.cost_per_1k_requests)
-    row_height = 28
+    row_height = 30
     margin_left = 190
-    margin_right = 92
-    margin_top = 24
-    margin_bottom = 34
+    margin_right = 110
+    margin_top = 28
+    margin_bottom = 48
     height = margin_top + margin_bottom + row_height * len(sorted_results)
-    max_cost = max(r.cost_per_1k_requests for r in sorted_results) or 1
+    costs = [r.cost_per_1k_requests for r in sorted_results]
+    max_cost = max(costs) or 1
+    median_cost = sorted(costs)[len(costs) // 2]
     plot_width = width - margin_left - margin_right
+    plot_x_end = margin_left + plot_width
+    cheapest_id = id(sorted_results[0])
+
+    def bar_x(cost: float) -> float:
+        return margin_left + (cost / max_cost) * plot_width
+
+    bands = []
+    for index in range(len(sorted_results)):
+        if index % 2 == 1:
+            y = margin_top + index * row_height
+            bands.append(
+                f'<rect class="bar-band" x="{margin_left - 4}" y="{y:.1f}" '
+                f'width="{plot_width + 8}" height="{row_height}" fill="#1e293b" '
+                f'opacity="0.35"/>'
+            )
+
     bars = []
     for index, result in enumerate(sorted_results):
         y = margin_top + index * row_height
         bar_width = max(result.cost_per_1k_requests / max_cost * plot_width, 2)
         color = PROVIDER_COLORS.get(result.provider.value, "#94a3b8")
+        cheapest_marker = ""
+        if id(result) == cheapest_id:
+            cheapest_marker = (
+                f'<text x="{margin_left + bar_width + 56:.1f}" y="{y + 19}" '
+                f'class="cheapest-tag">★ cheapest</text>'
+            )
         bars.append(
-            f"""<g>
-              <text x="{margin_left - 10}" y="{y + 17}" text-anchor="end" class="bar-label">
+            f"""<g class="bar-row">
+              <text x="{margin_left - 10}" y="{y + 19}" text-anchor="end" class="bar-label">
                 {escape(result.display_name)}
               </text>
-              <rect x="{margin_left}" y="{y + 5}" width="{bar_width:.1f}" height="14"
-                    rx="7" fill="{color}">
+              <rect class="bar-rect" x="{margin_left}" y="{y + 6}" width="{bar_width:.1f}"
+                    height="16" rx="8" fill="{color}">
                 <title>{escape(result.display_name)} | {escape(result.provider.value)} |
                   Cost: ${result.cost_per_1k_requests:.2f}/1K | Quality: {result.quality_score:.0f} |
                   Latency: {result.latency_p50_ms:.0f}ms</title>
               </rect>
-              <text x="{margin_left + bar_width + 8:.1f}" y="{y + 17}" class="bar-value">
+              <text x="{margin_left + bar_width + 8:.1f}" y="{y + 19}" class="bar-value">
                 ${result.cost_per_1k_requests:.2f}
               </text>
+              {cheapest_marker}
             </g>"""
+        )
+
+    axis_y_top = margin_top
+    axis_y_bottom = margin_top + len(sorted_results) * row_height
+    median_x = bar_x(median_cost)
+    median_line = (
+        f'<line class="median-line" x1="{median_x:.1f}" y1="{axis_y_top}" '
+        f'x2="{median_x:.1f}" y2="{axis_y_bottom}" stroke="#f0f2f5" stroke-width="1" '
+        f'stroke-dasharray="4,3" opacity="0.45"/>'
+        f'<text x="{median_x:.1f}" y="{axis_y_top - 8}" text-anchor="middle" '
+        f'class="median-label">median ${median_cost:.2f}</text>'
+    )
+    tick_fracs = [0.0, 0.25, 0.5, 0.75, 1.0]
+    ticks = []
+    for frac in tick_fracs:
+        tx = margin_left + frac * plot_width
+        ticks.append(
+            f'<line x1="{tx:.1f}" y1="{axis_y_bottom}" x2="{tx:.1f}" '
+            f'y2="{axis_y_bottom + 5}" stroke="#475569"/>'
+            f'<text x="{tx:.1f}" y="{axis_y_bottom + 18}" text-anchor="middle" '
+            f'class="axis-tick">${frac * max_cost:.2g}</text>'
         )
     return f"""<svg viewBox="0 0 {width} {height}" class="benchmark-chart bar-chart" role="img"
       aria-label="Cost per model sorted cheapest first">
-      <text x="{margin_left}" y="{height - 8}" class="axis-label">Cost / 1K reqs</text>
+      {"".join(bands)}
+      <line x1="{margin_left}" y1="{axis_y_bottom}" x2="{plot_x_end}" y2="{axis_y_bottom}"
+            stroke="#363b4a"/>
+      {"".join(ticks)}
+      {median_line}
+      <text x="{margin_left}" y="{height - 8}" class="axis-label">Cost / 1K reqs ($)</text>
       {"".join(bars)}
+    </svg>"""
+
+
+def _place_labels(
+    points: list[tuple[float, float, str]],
+    chart_width: float,
+    min_dy: float = 16.0,
+) -> list[tuple[float, float, str, str]]:
+    """Simple label-placement that nudges overlapping labels vertically.
+
+    Returns a list of (x, y, text, text_anchor).
+    """
+    placed: list[tuple[float, float, str, str]] = []
+    for x, y, text in sorted(points, key=lambda p: p[1]):
+        anchor = "start" if x < chart_width * 0.7 else "end"
+        dx = 12 if anchor == "start" else -12
+        final_y = y
+        for _, py, _, _ in placed:
+            if abs(final_y - py) < min_dy:
+                final_y = py + min_dy
+        placed.append((x + dx, final_y, text, anchor))
+    return placed
+
+
+def _scatter_svg(results: list[BenchmarkResult], width: int = 720, height: int = 460) -> str:
+    """Quality (y) vs Cost (x, log scale) scatter with labeled Pareto frontier."""
+    import math
+
+    costs = [max(r.cost_per_1k_requests, 0.001) for r in results]
+    qualities = [r.quality_score for r in results]
+    min_c, max_c = min(costs), max(costs)
+    min_q, max_q = min(qualities), max(qualities)
+    pad_q = (max_q - min_q) * 0.1 or 5
+    min_q -= pad_q
+    max_q += pad_q
+    min_log = math.log10(min_c)
+    max_log = math.log10(max_c)
+    if min_log == max_log:
+        min_log -= 0.5
+        max_log += 0.5
+
+    margin_left = 56
+    margin_right = 36
+    margin_top = 56
+    margin_bottom = 58
+
+    def px(cost: float) -> float:
+        value = math.log10(max(cost, 0.001))
+        return margin_left + (value - min_log) / (max_log - min_log) * (
+            width - margin_left - margin_right
+        )
+
+    def py(quality: float) -> float:
+        return height - margin_bottom - (quality - min_q) / (max_q - min_q) * (
+            height - margin_top - margin_bottom
+        )
+
+    frontier_list = compute_pareto_frontier(results)
+    frontier = {id(r) for r in frontier_list}
+    median_cost = sorted(costs)[len(costs) // 2]
+    median_quality = sorted(qualities)[len(qualities) // 2]
+
+    # Horizontal quality gridlines at 25/50/75% of the quality range
+    grid_y = []
+    q_range = max_q - min_q
+    for frac in (0.25, 0.5, 0.75):
+        q_val = min_q + frac * q_range
+        gy = py(q_val)
+        grid_y.append(
+            f'<line x1="{margin_left}" y1="{gy:.1f}" x2="{width - margin_right}" '
+            f'y2="{gy:.1f}" stroke="#334155" stroke-opacity="0.25" stroke-width="1"/>'
+        )
+
+    # Pareto frontier line: faint glow + dashed primary
+    sorted_frontier = sorted(frontier_list, key=lambda r: r.cost_per_1k_requests)
+    if len(sorted_frontier) >= 2:
+        frontier_pts = " ".join(
+            f"{px(r.cost_per_1k_requests):.1f},{py(r.quality_score):.1f}"
+            for r in sorted_frontier
+        )
+        frontier_line = (
+            f'<polyline class="frontier-glow" points="{frontier_pts}" fill="none" '
+            f'stroke="#22d3ee" stroke-width="6" opacity="0.18"/>'
+            f'<polyline class="frontier-line" points="{frontier_pts}" fill="none" '
+            f'stroke="#22d3ee" stroke-width="2" stroke-dasharray="6,4" opacity="0.85"/>'
+        )
+    else:
+        frontier_line = ""
+
+    dots = []
+    label_seeds: list[tuple[float, float, str]] = []
+    for result in results:
+        is_frontier = id(result) in frontier
+        color = PROVIDER_COLORS.get(result.provider.value, "#94a3b8")
+        radius = 9 if is_frontier else 6
+        opacity = "1" if is_frontier else "0.6"
+        classes = "chart-point chart-point--frontier" if is_frontier else "chart-point"
+        cx = px(result.cost_per_1k_requests)
+        cy = py(result.quality_score)
+        dots.append(
+            f'<circle class="{classes}" cx="{cx:.1f}" cy="{cy:.1f}" r="{radius}" '
+            f'fill="{color}" stroke="#0f1117" stroke-width="1.5" opacity="{opacity}" '
+            f'data-name="{escape(result.display_name)}" '
+            f'data-provider="{escape(result.provider.value)}" '
+            f'data-quality="{result.quality_score:.0f}" '
+            f'data-cost="{result.cost_per_1k_requests:.2f}" '
+            f'data-latency="{result.latency_p50_ms:.0f}">'
+            f"<title>{escape(result.display_name)} | {escape(result.provider.value)} | "
+            f"Quality: {result.quality_score:.0f} | Cost: ${result.cost_per_1k_requests:.2f}/1K | "
+            f"Latency: {result.latency_p50_ms:.0f}ms</title></circle>"
+        )
+        if is_frontier:
+            label_seeds.append((cx, cy, _short_name(result.display_name)))
+
+    labels = []
+    for x, y, text, anchor in _place_labels(label_seeds, width):
+        labels.append(
+            f'<text class="point-label" x="{x:.1f}" y="{y:.1f}" '
+            f'text-anchor="{anchor}" dominant-baseline="middle">{escape(text)}</text>'
+        )
+
+    providers = sorted({r.provider.value for r in results})
+    legend = "".join(
+        f'<g transform="translate(0,{i * 22})"><circle cx="0" cy="0" r="5" '
+        f'fill="{PROVIDER_COLORS.get(provider, "#94a3b8")}"/>'
+        f'<text x="12" y="4" class="legend-label">{escape(provider)}</text></g>'
+        for i, provider in enumerate(providers)
+    )
+    ticks = sorted({min_c, (min_c * max_c) ** 0.5, max_c})
+    tick_marks = "".join(
+        f'<g><line x1="{px(tick):.1f}" y1="{height - margin_bottom:.1f}" '
+        f'x2="{px(tick):.1f}" y2="{height - margin_bottom + 5:.1f}" '
+        f'stroke="#475569"/><text x="{px(tick):.1f}" y="{height - margin_bottom + 20:.1f}" '
+        f'text-anchor="middle" fill="#9ca3b4" font-size="11">${tick:.2g}</text></g>'
+        for tick in ticks
+    )
+
+    return f"""<svg viewBox="0 0 {width} {height}" class="benchmark-chart scatter-chart" role="img"
+      aria-label="Cost vs quality chart using a logarithmic cost scale">
+      {"".join(grid_y)}
+      <rect x="{margin_left}" y="{margin_top}" width="{px(median_cost) - margin_left:.1f}"
+            height="{py(median_quality) - margin_top:.1f}" fill="rgba(16, 185, 129, 0.08)"/>
+      <line x1="{px(median_cost):.1f}" y1="{margin_top}" x2="{px(median_cost):.1f}"
+            y2="{height - margin_bottom}" class="guide-line"/>
+      <line x1="{margin_left}" y1="{py(median_quality):.1f}" x2="{width - margin_right}"
+            y2="{py(median_quality):.1f}" class="guide-line"/>
+      <text x="{margin_left + 12}" y="{margin_top + 18}" class="sweet-spot-label">Sweet spot</text>
+      <text x="{margin_left + 8}" y="{margin_top - 12}" class="quadrant-hint">
+        ← Higher quality, lower cost</text>
+      <line x1="{margin_left}" y1="{height - margin_bottom}" x2="{width - margin_right}"
+            y2="{height - margin_bottom}" stroke="#363b4a"/>
+      <line x1="{margin_left}" y1="{margin_top}" x2="{margin_left}"
+            y2="{height - margin_bottom}" stroke="#363b4a"/>
+      {tick_marks}
+      <text x="{width // 2}" y="{height - 8}" text-anchor="middle" fill="#9ca3b4" font-size="12">
+        Cost / 1K reqs ($, log scale)</text>
+      <text x="16" y="{height // 2}" text-anchor="middle" fill="#9ca3b4" font-size="12"
+            transform="rotate(-90 16 {height // 2})">Quality</text>
+      {frontier_line}
+      {"".join(dots)}
+      {"".join(labels)}
+      <g class="chart-legend" transform="translate({width - 150}, {margin_top + 8})">{legend}</g>
+    </svg>"""
+
+
+def _latency_scatter_svg(
+    results: list[BenchmarkResult], width: int = 720, height: int = 460
+) -> str:
+    """Latency (y, inverted so 'fast & cheap' sits top-left) vs Cost (x, log scale)."""
+    import math
+
+    costs = [max(r.cost_per_1k_requests, 0.001) for r in results]
+    latencies = [max(r.latency_p50_ms, 1.0) for r in results]
+    min_c, max_c = min(costs), max(costs)
+    min_l, max_l = min(latencies), max(latencies)
+    pad_l = (max_l - min_l) * 0.1 or 50
+    min_l -= pad_l
+    max_l += pad_l
+    if min_l < 0:
+        min_l = 0
+    min_log = math.log10(min_c)
+    max_log = math.log10(max_c)
+    if min_log == max_log:
+        min_log -= 0.5
+        max_log += 0.5
+
+    margin_left = 56
+    margin_right = 36
+    margin_top = 56
+    margin_bottom = 58
+
+    def px(cost: float) -> float:
+        value = math.log10(max(cost, 0.001))
+        return margin_left + (value - min_log) / (max_log - min_log) * (
+            width - margin_left - margin_right
+        )
+
+    def py(latency: float) -> float:
+        # Lower latency = higher on chart (good is up)
+        return margin_top + (latency - min_l) / (max_l - min_l) * (
+            height - margin_top - margin_bottom
+        )
+
+    # Pareto frontier for cost vs latency (both lower is better)
+    sorted_by_cost = sorted(results, key=lambda r: r.cost_per_1k_requests)
+    front_ids: set[int] = set()
+    best_lat = float("inf")
+    front_seq: list[BenchmarkResult] = []
+    for r in sorted_by_cost:
+        if r.latency_p50_ms < best_lat:
+            best_lat = r.latency_p50_ms
+            front_ids.add(id(r))
+            front_seq.append(r)
+
+    grid_y_lines = []
+    l_range = max_l - min_l
+    for frac in (0.25, 0.5, 0.75):
+        l_val = min_l + frac * l_range
+        gy = py(l_val)
+        grid_y_lines.append(
+            f'<line x1="{margin_left}" y1="{gy:.1f}" x2="{width - margin_right}" '
+            f'y2="{gy:.1f}" stroke="#334155" stroke-opacity="0.25" stroke-width="1"/>'
+        )
+
+    if len(front_seq) >= 2:
+        pts = " ".join(
+            f"{px(r.cost_per_1k_requests):.1f},{py(r.latency_p50_ms):.1f}" for r in front_seq
+        )
+        frontier_line = (
+            f'<polyline class="frontier-glow" points="{pts}" fill="none" '
+            f'stroke="#22d3ee" stroke-width="6" opacity="0.18"/>'
+            f'<polyline class="frontier-line" points="{pts}" fill="none" '
+            f'stroke="#22d3ee" stroke-width="2" stroke-dasharray="6,4" opacity="0.85"/>'
+        )
+    else:
+        frontier_line = ""
+
+    dots = []
+    label_seeds: list[tuple[float, float, str]] = []
+    for result in results:
+        is_frontier = id(result) in front_ids
+        color = PROVIDER_COLORS.get(result.provider.value, "#94a3b8")
+        radius = 9 if is_frontier else 6
+        opacity = "1" if is_frontier else "0.6"
+        classes = "chart-point chart-point--frontier" if is_frontier else "chart-point"
+        cx = px(result.cost_per_1k_requests)
+        cy = py(result.latency_p50_ms)
+        dots.append(
+            f'<circle class="{classes}" cx="{cx:.1f}" cy="{cy:.1f}" r="{radius}" '
+            f'fill="{color}" stroke="#0f1117" stroke-width="1.5" opacity="{opacity}" '
+            f'data-name="{escape(result.display_name)}" '
+            f'data-provider="{escape(result.provider.value)}" '
+            f'data-quality="{result.quality_score:.0f}" '
+            f'data-cost="{result.cost_per_1k_requests:.2f}" '
+            f'data-latency="{result.latency_p50_ms:.0f}">'
+            f"<title>{escape(result.display_name)} | {escape(result.provider.value)} | "
+            f"Latency: {result.latency_p50_ms:.0f}ms | Cost: ${result.cost_per_1k_requests:.2f}/1K | "
+            f"Quality: {result.quality_score:.0f}</title></circle>"
+        )
+        if is_frontier:
+            label_seeds.append((cx, cy, _short_name(result.display_name)))
+
+    labels = []
+    for x, y, text, anchor in _place_labels(label_seeds, width):
+        labels.append(
+            f'<text class="point-label" x="{x:.1f}" y="{y:.1f}" '
+            f'text-anchor="{anchor}" dominant-baseline="middle">{escape(text)}</text>'
+        )
+
+    providers = sorted({r.provider.value for r in results})
+    legend = "".join(
+        f'<g transform="translate(0,{i * 22})"><circle cx="0" cy="0" r="5" '
+        f'fill="{PROVIDER_COLORS.get(provider, "#94a3b8")}"/>'
+        f'<text x="12" y="4" class="legend-label">{escape(provider)}</text></g>'
+        for i, provider in enumerate(providers)
+    )
+    ticks = sorted({min_c, (min_c * max_c) ** 0.5, max_c})
+    tick_marks = "".join(
+        f'<g><line x1="{px(tick):.1f}" y1="{height - margin_bottom:.1f}" '
+        f'x2="{px(tick):.1f}" y2="{height - margin_bottom + 5:.1f}" '
+        f'stroke="#475569"/><text x="{px(tick):.1f}" y="{height - margin_bottom + 20:.1f}" '
+        f'text-anchor="middle" fill="#9ca3b4" font-size="11">${tick:.2g}</text></g>'
+        for tick in ticks
+    )
+
+    return f"""<svg viewBox="0 0 {width} {height}" class="benchmark-chart scatter-chart" role="img"
+      aria-label="Cost vs latency chart using a logarithmic cost scale">
+      {"".join(grid_y_lines)}
+      <line x1="{margin_left}" y1="{height - margin_bottom}" x2="{width - margin_right}"
+            y2="{height - margin_bottom}" stroke="#363b4a"/>
+      <line x1="{margin_left}" y1="{margin_top}" x2="{margin_left}"
+            y2="{height - margin_bottom}" stroke="#363b4a"/>
+      <text x="{margin_left + 8}" y="{margin_top - 12}" class="quadrant-hint">
+        ← Faster &amp; cheaper</text>
+      {tick_marks}
+      <text x="{width // 2}" y="{height - 8}" text-anchor="middle" fill="#9ca3b4" font-size="12">
+        Cost / 1K reqs ($, log scale)</text>
+      <text x="16" y="{height // 2}" text-anchor="middle" fill="#9ca3b4" font-size="12"
+            transform="rotate(-90 16 {height // 2})">Latency p50 (ms, lower is better)</text>
+      {frontier_line}
+      {"".join(dots)}
+      {"".join(labels)}
+      <g class="chart-legend" transform="translate({width - 150}, {margin_top + 8})">{legend}</g>
     </svg>"""
 
 
@@ -249,8 +641,16 @@ def _scatter_svg(results: list[BenchmarkResult], width: int = 720, height: int =
 
 
 def _pricing_rows(models: list[ModelPricing]) -> str:
-    rows = []
+    rows: list[str] = []
+    last_tier: str | None = None
     for m in sorted(models, key=lambda x: x.avg_per_1m):
+        tier_key, _, tier_header = _pricing_tier(m.avg_per_1m)
+        if tier_key != last_tier:
+            rows.append(
+                f"<tr class='pricing-tier-header pricing-tier--{tier_key}'>"
+                f"<td colspan='8'>{escape(tier_header)}</td></tr>"
+            )
+            last_tier = tier_key
         cached = _cached_input_per_1m(m)
         source = (
             f"<a href='{escape(m.source_url)}' target='_blank' rel='noopener'>source</a>"
@@ -258,7 +658,8 @@ def _pricing_rows(models: list[ModelPricing]) -> str:
             else ""
         )
         rows.append(
-            f"<tr><td>{escape(m.display_name)}</td>"
+            f"<tr class='pricing-row pricing-tier--{tier_key}'>"
+            f"<td>{escape(m.display_name)}</td>"
             f"<td>{_provider_badge(m.provider.value)}</td>"
             f"<td class='highlight'>${m.avg_per_1m:.3f}</td>"
             f"<td class='muted'>{source}</td>"
@@ -314,13 +715,22 @@ def _benchmark_table(results: list[BenchmarkResult], table_id: str) -> str:
         for provider in providers
     )
     rows = []
+    visible_initial = 8
     for index, r in enumerate(sorted_results):
         tags = ", ".join(r.tags) if r.tags else ""
         value = _quality_per_dollar(r)
         quality_class = _quality_class(r.quality_score)
+        hidden_class = " bench-row-hidden" if index >= visible_initial else ""
+        title = (
+            f"{r.display_name}: Quality {r.quality_score:.0f}, "
+            f"Latency {r.latency_p50_ms:.0f}ms, "
+            f"Cost ${r.cost_per_1k_requests:.2f}/1K"
+        )
         rows.append(
-            f"<tr data-default-index='{index}' data-provider='{escape(r.provider.value)}' "
-            f"data-cost='{r.cost_per_1k_requests:.6f}' data-quality='{r.quality_score:.6f}'>"
+            f"<tr class='bench-row{hidden_class}' data-default-index='{index}' "
+            f"data-provider='{escape(r.provider.value)}' "
+            f"data-cost='{r.cost_per_1k_requests:.6f}' "
+            f"data-quality='{r.quality_score:.6f}' title='{escape(title)}'>"
             f"<td data-value='{escape(r.display_name.lower())}'>{escape(r.display_name)}</td>"
             f"<td data-value='{escape(r.provider.value)}'>{_provider_badge(r.provider.value)}</td>"
             f"<td class='{quality_class}' data-value='{r.quality_score:.6f}'>{r.quality_score:.0f}</td>"
@@ -329,7 +739,15 @@ def _benchmark_table(results: list[BenchmarkResult], table_id: str) -> str:
             f"<td data-value='{value:.6f}'>{value:.1f}</td>"
             f"<td data-value='{escape(tags.lower())}'>{escape(tags)}</td></tr>"
         )
-    return f"""<div class="benchmark-card" data-table-id="{escape(table_id)}">
+
+    hidden_count = max(0, len(sorted_results) - visible_initial)
+    show_all_button = (
+        f'<button type="button" class="show-all-btn" data-hidden-count="{hidden_count}">'
+        f"Show all {len(sorted_results)} models ▾</button>"
+        if hidden_count > 0
+        else ""
+    )
+    return f"""<div class="benchmark-card bench-section" data-table-id="{escape(table_id)}">
       {_quick_picks_html(results)}
       <div class="filter-bar" aria-label="Filters for {escape(table_id)} benchmark">
         <div class="filter-group">
@@ -359,7 +777,7 @@ def _benchmark_table(results: list[BenchmarkResult], table_id: str) -> str:
         <th><button type="button" data-sort="tags" data-type="text">Tags</button></th>
       </tr></thead>
       <tbody>{"".join(rows)}</tbody>
-    </table></div></div>"""
+    </table></div>{show_all_button}</div>"""
 
 
 def _ga4_script() -> str:
@@ -449,6 +867,7 @@ def generate_dashboard(output_dir: Path | None = None) -> Path:
         for task in benchmarks
     )
     dashboard_script = """
+  <div id="chart-tooltip" class="chart-tooltip" role="tooltip" aria-hidden="true"></div>
   <script>
     (() => {
       const sortIndexes = {
@@ -485,8 +904,17 @@ def generate_dashboard(output_dir: Path | None = None) -> Path:
         const maxCost = card.querySelector(".filter-max-cost");
         const minQuality = card.querySelector(".filter-min-quality");
         const qualityOutput = card.querySelector(".quality-output");
+        const showAllBtn = card.querySelector(".show-all-btn");
         let sortKey = "value";
         let direction = "desc";
+        let truncated = !!showAllBtn;
+
+        function applyTruncation() {
+          rows.forEach((row) => {
+            const initiallyHidden = row.classList.contains("bench-row-hidden");
+            row.dataset.truncated = (truncated && initiallyHidden) ? "1" : "0";
+          });
+        }
 
         function render() {
           const sorted = [...rows].sort((a, b) => {
@@ -509,12 +937,14 @@ def generate_dashboard(output_dir: Path | None = None) -> Path:
           const maxCostValue = numberValue(maxCost.value) || Number.POSITIVE_INFINITY;
           const minQualityValue = numberValue(minQuality.value);
           qualityOutput.value = minQuality.value;
+          applyTruncation();
           rows.forEach((row) => {
-            const visible = activeProviders.has(row.dataset.provider)
+            const matchesFilter = activeProviders.has(row.dataset.provider)
               && numberValue(row.dataset.cost) >= minCostValue
               && numberValue(row.dataset.cost) <= maxCostValue
               && numberValue(row.dataset.quality) >= minQualityValue;
-            row.hidden = !visible;
+            const isTruncated = row.dataset.truncated === "1";
+            row.hidden = !matchesFilter || isTruncated;
           });
           setSortLabels(card, sortKey, direction);
         }
@@ -539,7 +969,21 @@ def generate_dashboard(output_dir: Path | None = None) -> Path:
           render();
         }));
         [minCost, maxCost, minQuality].forEach((input) => input.addEventListener("input", render));
+        if (showAllBtn) {
+          showAllBtn.addEventListener("click", () => {
+            truncated = false;
+            showAllBtn.remove();
+            render();
+          });
+        }
         render();
+      }
+
+      function flashCell(cell) {
+        cell.classList.remove("cell-changed");
+        // Force reflow so the animation restarts even on rapid edits.
+        void cell.offsetWidth;
+        cell.classList.add("cell-changed");
       }
 
       function initCalculator() {
@@ -554,24 +998,40 @@ def generate_dashboard(output_dir: Path | None = None) -> Path:
           const taskCount = numberValue(tasks.value);
           const inputCount = numberValue(inputTokens.value);
           const outputCount = numberValue(outputTokens.value);
+          const monthlies = [];
           rows.forEach((row) => {
             const monthly = taskCount * 30 * (
               inputCount * numberValue(row.dataset.inputPrice) / 1000000
               + outputCount * numberValue(row.dataset.outputPrice) / 1000000
             );
+            const previous = numberValue(row.dataset.monthlyCost);
             row.dataset.monthlyCost = monthly.toFixed(6);
-            row.querySelector(".calculator-cost").textContent = `$${monthly.toFixed(2)}`;
+            const costCell = row.querySelector(".calculator-cost");
+            const next = `$${monthly.toFixed(2)}`;
+            if (costCell.textContent !== next) {
+              costCell.textContent = next;
+              if (previous !== 0) flashCell(costCell);
+            }
             row.classList.remove("is-recommended");
+            monthlies.push(monthly);
           });
-          const recommended = rows
-            .filter((row) => numberValue(row.dataset.monthlyCost) <= 50 && numberValue(row.dataset.quality) > 0)
-            .sort((a, b) => numberValue(b.dataset.quality) - numberValue(a.dataset.quality))[0];
-          if (recommended) recommended.classList.add("is-recommended");
+          // "Recommended" = quality >= 90 AND monthly cost in bottom 30%
+          // among models with a quality score. Multiple rows can qualify.
+          const ranked = [...monthlies].sort((a, b) => a - b);
+          const threshold = ranked[Math.max(0, Math.floor(ranked.length * 0.3) - 1)] ?? Infinity;
+          rows.forEach((row, idx) => {
+            const quality = numberValue(row.dataset.quality);
+            if (quality >= 90 && monthlies[idx] <= threshold) {
+              row.classList.add("is-recommended");
+            }
+          });
           rows
             .sort((a, b) => numberValue(a.dataset.monthlyCost) - numberValue(b.dataset.monthlyCost))
             .forEach((row) => tbody.appendChild(row));
         }
-        [tasks, inputTokens, outputTokens].forEach((input) => input.addEventListener("input", render));
+        [tasks, inputTokens, outputTokens].forEach((input) =>
+          input.addEventListener("input", render)
+        );
         render();
       }
 
@@ -583,6 +1043,63 @@ def generate_dashboard(output_dir: Path | None = None) -> Path:
           const expanded = table.classList.toggle("show-details");
           button.setAttribute("aria-expanded", String(expanded));
           button.textContent = expanded ? "Hide details" : "Show details";
+        });
+      }
+
+      function initChartToggles() {
+        document.querySelectorAll(".chart-wrap").forEach((wrap) => {
+          const buttons = wrap.querySelectorAll(".chart-toggle-btn");
+          const views = wrap.querySelectorAll(".chart-view");
+          if (!buttons.length) return;
+          buttons.forEach((btn) => {
+            btn.addEventListener("click", () => {
+              const target = btn.dataset.view;
+              buttons.forEach((b) => {
+                const active = b === btn;
+                b.classList.toggle("is-active", active);
+                b.setAttribute("aria-selected", String(active));
+              });
+              views.forEach((v) => {
+                v.hidden = v.dataset.view !== target;
+              });
+            });
+          });
+        });
+      }
+
+      function initChartTooltip() {
+        const tip = document.getElementById("chart-tooltip");
+        if (!tip) return;
+        document.querySelectorAll(".chart-point").forEach((dot) => {
+          dot.addEventListener("mouseenter", () => {
+            const name = dot.dataset.name || "";
+            const provider = dot.dataset.provider || "";
+            const quality = dot.dataset.quality || "";
+            const cost = dot.dataset.cost || "";
+            const latency = dot.dataset.latency || "";
+            tip.innerHTML =
+              `<strong>${name}</strong>` +
+              `<span class="tt-row">Provider: <em>${provider}</em></span>` +
+              `<span class="tt-row">Quality: <em>${quality}</em></span>` +
+              `<span class="tt-row">Cost: <em>$${cost}/1K</em></span>` +
+              `<span class="tt-row">Latency p50: <em>${latency}ms</em></span>`;
+            tip.style.display = "block";
+            tip.setAttribute("aria-hidden", "false");
+            const rect = dot.getBoundingClientRect();
+            const tipRect = tip.getBoundingClientRect();
+            let left = rect.left + window.scrollX + 14;
+            let top = rect.top + window.scrollY - tipRect.height - 12;
+            if (top < window.scrollY + 8) top = rect.bottom + window.scrollY + 12;
+            if (left + tipRect.width > window.scrollX + window.innerWidth - 8) {
+              left = window.scrollX + window.innerWidth - tipRect.width - 8;
+            }
+            tip.style.left = left + "px";
+            tip.style.top = top + "px";
+          });
+          dot.addEventListener("mouseleave", () => {
+            tip.style.display = "none";
+            tip.setAttribute("aria-hidden", "true");
+          });
         });
       }
 
@@ -605,6 +1122,8 @@ def generate_dashboard(output_dir: Path | None = None) -> Path:
       document.querySelectorAll(".benchmark-card").forEach(initBenchmark);
       initCalculator();
       initPricingDetails();
+      initChartToggles();
+      initChartTooltip();
       initScrollSpy();
     })();
   </script>
@@ -694,14 +1213,47 @@ def generate_dashboard(output_dir: Path | None = None) -> Path:
       min-height: 400px; overflow-x: auto;
     }}
     .benchmark-chart {{ width: 100%; max-width: 720px; height: auto; }}
-    .chart-point--frontier {{ filter: drop-shadow(0 0 7px rgba(240, 242, 245, 0.75)); stroke: #f0f2f5; stroke-width: 2.5; }}
+    .chart-point {{ transition: r 0.15s ease, opacity 0.15s ease; cursor: pointer; }}
+    .chart-point:hover {{ r: 12; opacity: 1 !important; }}
+    .chart-point--frontier {{ filter: drop-shadow(0 0 7px rgba(34, 211, 238, 0.55)); stroke: #f0f2f5; stroke-width: 2.5; }}
     .guide-line {{ stroke: var(--border-default); stroke-dasharray: 6 6; }}
-    .point-label, .legend-label, .bar-label, .bar-value, .axis-label, .sweet-spot-label {{
+    .frontier-line {{ pointer-events: none; }}
+    .frontier-glow {{ pointer-events: none; }}
+    .point-label, .legend-label, .bar-label, .bar-value, .axis-label, .axis-tick,
+    .sweet-spot-label, .quadrant-hint, .median-label, .cheapest-tag {{
       fill: var(--text-primary); font-size: 11px; font-weight: var(--font-semibold);
     }}
-    .bar-label, .legend-label {{ fill: var(--text-secondary); }}
+    .point-label {{
+      paint-order: stroke; stroke: rgba(15, 17, 23, 0.85); stroke-width: 3;
+      stroke-linejoin: round; pointer-events: none;
+    }}
+    .bar-label, .legend-label, .axis-tick {{ fill: var(--text-secondary); }}
     .bar-value, .axis-label {{ fill: var(--text-secondary); }}
     .sweet-spot-label {{ fill: var(--color-success); }}
+    .quadrant-hint {{ fill: #22d3ee; font-size: 11px; opacity: 0.85; }}
+    .median-label {{ fill: #cbd5e1; font-size: 10px; opacity: 0.8; }}
+    .cheapest-tag {{ fill: var(--color-success); font-size: 11px; }}
+    .chart-toggle {{
+      display: inline-flex; gap: 4px; padding: 4px; margin-bottom: var(--space-3);
+      background: var(--bg-input); border: 1px solid var(--border-default); border-radius: 999px;
+    }}
+    .chart-toggle-btn {{
+      appearance: none; border: 0; background: transparent; color: var(--text-secondary);
+      cursor: pointer; padding: 6px 14px; font-size: var(--text-xs); font-weight: var(--font-semibold);
+      border-radius: 999px; transition: background 0.15s ease, color 0.15s ease;
+    }}
+    .chart-toggle-btn:hover {{ color: var(--text-primary); }}
+    .chart-toggle-btn.is-active {{ background: var(--color-accent); color: #fff; }}
+    .chart-tooltip {{
+      position: absolute; display: none; pointer-events: none; z-index: 100;
+      background: #0f172aee; border: 1px solid #475569; border-radius: 8px;
+      padding: 8px 12px; font-size: 12px; color: #e2e8f0; line-height: 1.5;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5); max-width: 260px;
+      backdrop-filter: blur(8px);
+    }}
+    .chart-tooltip strong {{ display: block; color: #f1f5f9; margin-bottom: 4px; font-size: 13px; }}
+    .chart-tooltip .tt-row {{ display: block; color: #94a3b8; font-size: 11px; }}
+    .chart-tooltip .tt-row em {{ font-style: normal; color: #e2e8f0; font-weight: 500; }}
     footer {{ margin-top: var(--space-6); font-size: var(--text-xs); color: var(--text-secondary); }}
     a {{ color: var(--color-accent); }}
     .small {{ font-size: var(--text-sm); margin: calc(-1 * var(--space-2)) 0 var(--space-4); }}
@@ -756,6 +1308,12 @@ def generate_dashboard(output_dir: Path | None = None) -> Path:
       font-weight: var(--font-semibold);
     }}
     tr.is-recommended .recommended-badge {{ display: inline-flex; }}
+    tr.is-recommended td.calculator-cost {{ color: var(--color-success); font-weight: var(--font-semibold); }}
+    @keyframes cell-flash {{
+      0%   {{ background: rgba(99, 102, 241, 0.35); }}
+      100% {{ background: transparent; }}
+    }}
+    .cell-changed {{ animation: cell-flash 0.7s ease-out; }}
     .pricing-toggle {{
       border: 1px solid var(--border-default); border-radius: 8px; background: var(--bg-input);
       color: var(--text-primary); padding: var(--space-2) var(--space-4); cursor: pointer;
@@ -763,6 +1321,35 @@ def generate_dashboard(output_dir: Path | None = None) -> Path:
     }}
     .pricing-detail {{ display: none; }}
     .pricing-table.show-details .pricing-detail {{ display: table-cell; }}
+    .pricing-tier-header td {{
+      background: var(--bg-elevated); color: var(--text-secondary);
+      text-transform: uppercase; letter-spacing: 0.06em; font-size: var(--text-xs);
+      font-weight: var(--font-semibold); padding: var(--space-3) var(--space-4);
+      border-top: 1px solid var(--border-default);
+    }}
+    .pricing-tier-header.pricing-tier--budget td  {{ color: #4ade80; border-left: 3px solid #10b981; }}
+    .pricing-tier-header.pricing-tier--mid td     {{ color: #fbbf24; border-left: 3px solid #f59e0b; }}
+    .pricing-tier-header.pricing-tier--premium td {{ color: #f87171; border-left: 3px solid #ef4444; }}
+    .pricing-row.pricing-tier--budget  td:first-child {{ border-left: 3px solid #10b981; }}
+    .pricing-row.pricing-tier--mid     td:first-child {{ border-left: 3px solid #f59e0b; }}
+    .pricing-row.pricing-tier--premium td:first-child {{ border-left: 3px solid #ef4444; }}
+    .bench-row-hidden {{ display: none; }}
+    .show-all-btn {{
+      display: block; margin: var(--space-4) auto 0; padding: var(--space-2) var(--space-5);
+      background: transparent; border: 1px solid var(--border-default); border-radius: 999px;
+      color: var(--text-secondary); cursor: pointer; font-size: var(--text-sm);
+      font-weight: var(--font-medium); transition: background 0.15s ease, color 0.15s ease;
+    }}
+    .show-all-btn:hover {{
+      background: var(--bg-elevated); color: var(--text-primary); border-color: var(--color-accent);
+    }}
+    .quality-good, .quality-mid, .quality-low {{ transition: transform 0.1s ease; display: inline-block; }}
+    td.quality-good:hover, td.quality-mid:hover, td.quality-low:hover {{ transform: scale(1.05); }}
+    .card {{
+      background:
+        linear-gradient(180deg, rgba(99,102,241,0.04) 0%, transparent 120px),
+        var(--bg-surface);
+    }}
     .badge {{
       display: inline-block; font-size: 0.7rem; padding: 0.15rem 0.5rem;
       border-radius: 999px; vertical-align: middle; margin-left: 0.5rem;
@@ -778,18 +1365,22 @@ def generate_dashboard(output_dir: Path | None = None) -> Path:
     @media (max-width: 1024px) {{
       .chart-wrap {{ min-height: 300px; }}
     }}
-    @media (max-width: 639px) {{
-      .wrap {{ padding-inline: var(--space-4); }}
-      .pick-cards {{ flex-direction: column; }}
-      .filter-bar {{ flex-wrap: wrap; }}
-      table {{ font-size: var(--text-xs); }}
-      th, td {{ padding: var(--space-2) var(--space-3); }}
-    }}
     @media (max-width: 768px) {{
+      .benchmark-table th:nth-child(n+6),
+      .benchmark-table td:nth-child(n+6) {{ display: none; }}
+      .pick-cards {{ flex-direction: column; }}
+      .chart-wrap svg {{ width: 100%; height: auto; }}
+      .top-nav {{ top: 0; }}
       th:first-child, td:first-child {{
         position: sticky; left: 0; z-index: 1; background: var(--bg-surface);
       }}
-      .top-nav {{ top: 0; }}
+    }}
+    @media (max-width: 639px) {{
+      .wrap {{ padding-inline: var(--space-4); }}
+      .filter-bar {{ flex-wrap: wrap; }}
+      table {{ font-size: var(--text-xs); }}
+      th, td {{ padding: var(--space-2) var(--space-3); }}
+      .chart-toggle {{ width: 100%; justify-content: center; }}
     }}
   </style>
 </head>
@@ -811,17 +1402,20 @@ def generate_dashboard(output_dir: Path | None = None) -> Path:
     <section class="card calculator" id="calculator">
       <h2>Agentic cost calculator</h2>
       <p class="muted small">Estimate monthly spend for multi-turn tasks using provider
-      input/output token pricing. Defaults assume 100 tasks/day, 5K input tokens, and
-      2K output tokens per task.</p>
+      input/output token pricing. <strong>Edit any value below — costs recalculate live.</strong>
+      Defaults assume 100 tasks/day, 5K input tokens, and 2K output tokens per task.</p>
       <div class="calculator-controls">
         <label>Tasks per day
-          <input id="tasks-per-day" type="number" min="0" step="1" value="100"/>
+          <input id="tasks-per-day" type="number" min="0" step="1" value="100"
+                 placeholder="100"/>
         </label>
         <label>Avg input tokens/task
-          <input id="input-tokens" type="number" min="0" step="100" value="5000"/>
+          <input id="input-tokens" type="number" min="0" step="100" value="5000"
+                 placeholder="5000"/>
         </label>
         <label>Avg output tokens/task
-          <input id="output-tokens" type="number" min="0" step="100" value="2000"/>
+          <input id="output-tokens" type="number" min="0" step="100" value="2000"
+                 placeholder="2000"/>
         </label>
       </div>
       <div class="table-wrap">
