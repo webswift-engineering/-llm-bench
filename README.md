@@ -2,7 +2,7 @@
 
 Run the same tasks across every LLM provider. Get real cost, latency, and quality data.
 
-**Dashboard:** after publishing, live at `https://webswift-engineering.github.io/-llm-bench/`
+**Dashboard Demo:** https://webswift-engineering.github.io/-llm-bench/ 
 
 ## Workflow
 
